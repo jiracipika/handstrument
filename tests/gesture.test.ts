@@ -115,6 +115,34 @@ describe('gesture state machine', () => {
     expect(st.activeGesture).toBeNull();
     expect(st.detectedGesture).toBe('none');
   });
+
+  describe('tracking-dropout tolerance', () => {
+    const cfg = { stabilityMs: 100, cooldownMs: 300, confidenceThreshold: 0.75, motionVelocityThreshold: 1, missToleranceMs: 120 };
+    const miss = { gesture: 'none' as const, confidence: 0 };
+
+    it('keeps the gesture latched through brief misses (no audio gap)', () => {
+      const st = newGestureState();
+      expect(updateGestureState(st, { gesture: 'openPalm', confidence: 0.9 }, 0, cfg)).toBeNull();
+      expect(updateGestureState(st, { gesture: 'openPalm', confidence: 0.9 }, 120, cfg)).toBe('openPalm');
+      // jitter frame at +150 (within 120 ms of last good match)
+      expect(updateGestureState(st, miss, 150, cfg)).toBeNull();
+      expect(st.activeGesture).toBe('openPalm');
+      // good frame again: sustained, NOT retriggered
+      expect(updateGestureState(st, { gesture: 'openPalm', confidence: 0.9 }, 180, cfg)).toBeNull();
+    });
+
+    it('releases the gesture after misses exceed the tolerance', () => {
+      const st = newGestureState();
+      updateGestureState(st, { gesture: 'fist', confidence: 0.95 }, 0, cfg);
+      updateGestureState(st, { gesture: 'fist', confidence: 0.95 }, 120, cfg);
+      // long dropout: last good match at 120, tolerance 120 -> dead after 240
+      expect(updateGestureState(st, miss, 300, cfg)).toBeNull();
+      expect(st.activeGesture).toBeNull();
+      // gesture returns: must re-activate (fresh edge, so sound restarts)
+      expect(updateGestureState(st, { gesture: 'fist', confidence: 0.95 }, 420, cfg)).toBeNull();
+      expect(updateGestureState(st, { gesture: 'fist', confidence: 0.95 }, 540, cfg)).toBe('fist');
+    });
+  });
 });
 
 describe('motion detection', () => {

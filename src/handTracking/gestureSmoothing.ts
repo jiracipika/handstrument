@@ -7,6 +7,8 @@ export interface GestureStateConfig {
   cooldownMs: number; // min time between activations of the same gesture
   confidenceThreshold: number;
   motionVelocityThreshold: number; // normalized units/sec
+  /** single-frame classification misses tolerated before dropping the active gesture */
+  missToleranceMs?: number;
 }
 
 export const DEFAULT_STATE_CONFIG: GestureStateConfig = {
@@ -24,6 +26,8 @@ export interface HandGestureState {
   lastTriggeredGesture: GestureId | null;
   lastTriggeredTime: number;
   activeGesture: GestureId | null;
+  /** timestamp of the last frame with a valid (above-threshold) classification */
+  lastMatchTime: number;
   motionCooldownUntil: number;
   motionHistory: { x: number; y: number; t: number }[];
 }
@@ -37,6 +41,7 @@ export function newGestureState(): HandGestureState {
     lastTriggeredGesture: null,
     lastTriggeredTime: 0,
     activeGesture: null,
+    lastMatchTime: 0,
     motionCooldownUntil: 0,
     motionHistory: [],
   };
@@ -57,11 +62,20 @@ export function updateGestureState(
   st.confidence = match.confidence;
 
   if (match.confidence < cfg.confidenceThreshold || match.gesture === 'none') {
+    // Brief tracking dropouts are normal: keep the latched gesture alive for a
+    // short grace window instead of killing the chord every missed frame.
+    const tolerance = cfg.missToleranceMs ?? 120;
+    if (st.activeGesture && now - st.lastMatchTime < tolerance) {
+      st.candidateGesture = st.activeGesture;
+      st.confidence = 0;
+      return null;
+    }
     st.candidateGesture = 'none';
     st.gestureStartTime = null;
     st.activeGesture = null;
     return null;
   }
+  st.lastMatchTime = now;
 
   if (match.gesture !== st.candidateGesture) {
     st.candidateGesture = match.gesture;

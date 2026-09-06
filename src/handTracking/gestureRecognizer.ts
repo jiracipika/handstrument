@@ -28,6 +28,15 @@ function angleDelta(a: number, b: number): number {
   return d;
 }
 
+/**
+ * Schmitt trigger for finger extension: turn ON above 0.5, OFF below 0.3.
+ * The dead band between the two thresholds prevents flicker when a finger
+ * hovers near the extension boundary (common when framing a gesture).
+ */
+function hystUp(wasUp: boolean, ext: number): boolean {
+  return wasUp ? ext > 0.3 : ext > 0.5;
+}
+
 /** Extract continuous, resolution-independent features from 21 landmarks. */
 export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 / 30): HandFeatures {
   const s = handScale(landmarks);
@@ -49,14 +58,16 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
     if (f === 0) {
       // thumb: distance from index MCP, relative to hand scale
       const thumbExt = dist(tip, mcp) / s;
-      extensions.push(Math.min(1, thumbExt / 1.6));
-      fingersUp.push(thumbExt > 1.0);
+      const ext = Math.min(1, thumbExt / 1.6);
+      extensions.push(ext);
+      fingersUp.push(hystUp(prev?.fingersUp[f] ?? false, ext));
     } else {
       const tipW = dist(tip, wrist);
       const pipW = dist(pip, wrist);
       const ratio = tipW / Math.max(pipW, 1e-4);
-      extensions.push(Math.min(1, Math.max(0, (ratio - 0.9) / 0.6)));
-      fingersUp.push(ratio > 1.15);
+      const ext = Math.min(1, Math.max(0, (ratio - 0.9) / 0.6));
+      extensions.push(ext);
+      fingersUp.push(hystUp(prev?.fingersUp[f] ?? false, ext));
     }
   }
 

@@ -38,6 +38,7 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
   });
   const lastVideoTimeRef = useRef(-1);
   const lastFrameTRef = useRef(performance.now());
+  const lastUiWriteRef = useRef(0);
   const fpsRef = useRef({ frames: 0, last: performance.now() });
   const settings = useSettings((s) => s.settings);
   const settingsRef = useRef(settings);
@@ -95,6 +96,7 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
           cooldownMs: 350,
           confidenceThreshold: Math.max(0.4, 0.75 - (s.sensitivity - 1) * 0.25),
           motionVelocityThreshold: 1.2 / Math.max(s.sensitivity, 0.1),
+          missToleranceMs: 120,
         };
         const activated = updateGestureState(rt.state, match, now, cfg);
         detectMotion(rt.state, rt.features, now, cfg);
@@ -166,13 +168,22 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
               rt.activeChord = null;
             }
             resetGestureState(rt.state);
+            // immediate UI update: this is a state transition, not per-frame churn
             usePerf.getState().updateHand({ id: slot, tracked: false, active: null, chordLabel: null });
           }
         } else {
           rt.missingSince = null;
+        }
+      }
+      // Throttled UI mirror (~10 Hz): keeps the HUD live without re-rendering
+      // React every video frame, which steals time from the audio thread.
+      if (now - lastUiWriteRef.current > 100) {
+        lastUiWriteRef.current = now;
+        for (const slot of ['left', 'right'] as const) {
+          const rt = runtime.current[slot];
           usePerf.getState().updateHand({
             id: slot,
-            tracked: true,
+            tracked: seen.has(slot),
             gesture: rt.state.detectedGesture,
             active: rt.state.activeGesture,
             confidence: rt.state.confidence,

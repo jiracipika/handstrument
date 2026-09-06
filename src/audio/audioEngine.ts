@@ -91,6 +91,10 @@ export function buildPoly(instrumentId: string): Tone.PolySynth {
  */
 export class AudioEngine {
   private started = false;
+  private lastChordNotes: Record<'left' | 'right', { notes: string; time: number }> = {
+    left: { notes: '', time: 0 },
+    right: { notes: '', time: 0 },
+  };
   private voices: Record<'left' | 'right', { poly: Tone.PolySynth; gain: Tone.Gain; panner: Tone.Panner; filter: Tone.Filter }> | null = null;
   private master: Tone.Gain | null = null;
   private chain: {
@@ -181,6 +185,16 @@ export class AudioEngine {
     opts: { velocity?: number } = {},
   ): void {
     if (!this.voices || !this.started) return;
+    // Debounce: ignore identical re-triggers within 80 ms. Landmark jitter can
+    // fire the same activation edge twice; re-attacking the same notes back to
+    // back sounds like a stutter.
+    const key = noteNames.join(',');
+    const now = performance.now();
+    const last = this.lastChordNotes[hand];
+    if (last.notes === key && now - last.time < 80) return;
+    last.notes = key;
+    last.time = now;
+
     const v = this.voices[hand];
     v.poly.releaseAll();
     v.poly.triggerAttack(noteNames, Tone.now(), opts.velocity ?? 0.8);
@@ -224,14 +238,34 @@ export class AudioEngine {
   ): void {
     if (!this.voices) return;
     const v = this.voices[hand];
-    if (expr.pan !== undefined) v.panner.pan.rampTo(Math.max(-1, Math.min(1, expr.pan)), 0.08);
-    if (expr.filter !== undefined) v.filter.frequency.rampTo(Math.max(80, Math.min(16000, expr.filter)), 0.08);
-    if (expr.volume !== undefined) v.gain.gain.rampTo(Math.max(0, Math.min(1.5, expr.volume)), 0.1);
+    // Deadbands stop parameter chatter (audible zipper noise) when the hand
+    // is near the center or holding still.
+    if (expr.pan !== undefined && Math.abs(expr.pan) > 0.05) {
+      v.panner.pan.rampTo(Math.max(-1, Math.min(1, expr.pan)), 0.08);
+    } else if (expr.pan !== undefined) {
+      v.panner.pan.rampTo(0, 0.08);
+    }
+    if (expr.filter !== undefined) {
+      const f = Math.max(80, Math.min(16000, expr.filter));
+      v.filter.frequency.rampTo(f, 0.1);
+    }
+    if (expr.volume !== undefined) {
+      const g = Math.max(0, Math.min(1.5, expr.volume));
+      // only move when the change is audible (>1 dB-ish)
+      if (Math.abs(g - v.gain.gain.value) > 0.02) {
+        v.gain.gain.rampTo(g, 0.15);
+      }
+    }
   }
 
   startMetronome(bpm: number): void {
     if (!this.started) return;
-    this.stopMetronome();
+    // Idempotent: syncing settings on every React commit must not restart the
+    // transport (a restart audibly clips the current beat).
+    if (this.metronome) {
+      Tone.getTransport().bpm.value = bpm;
+      return;
+    }
     const synth = new Tone.Synth({
       oscillator: { type: 'square' },
       envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
