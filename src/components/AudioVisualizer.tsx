@@ -1,0 +1,57 @@
+import { useEffect, useRef } from 'react';
+import { AudioEngine } from '../audio/audioEngine';
+
+interface Props {
+  engineRef: React.MutableRefObject<AudioEngine | null>;
+  className?: string;
+}
+
+/** Real-time spectrum visualizer driven by the audio engine's analyser. */
+export default function AudioVisualizer({ engineRef, className }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    const draw = () => {
+      rafRef.current = requestAnimationFrame(draw);
+      const canvas = canvasRef.current;
+      const eng = engineRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.clearRect(0, 0, w, h);
+
+      const spec = eng?.getSpectrum();
+      const bins = 48;
+      const bw = w / bins;
+      for (let i = 0; i < bins; i++) {
+        let v = 0;
+        if (spec && !Array.isArray(spec) && spec.length > 0) {
+          // analyser returns dB values (-100..0 roughly); normalize
+          const idx = Math.floor((i / bins) * spec.length);
+          const db = spec[idx];
+          v = Math.max(0, Math.min(1, (db + 90) / 90));
+        }
+        // idle gentle wave when silent
+        const idle = 0.03 + 0.02 * Math.sin(Date.now() / 400 + i * 0.4);
+        const val = Math.max(v, idle);
+        const bh = val * (h - 6);
+        const grad = ctx.createLinearGradient(0, h, 0, h - bh);
+        grad.addColorStop(0, 'rgba(34,211,238,0.9)');
+        grad.addColorStop(1, 'rgba(244,114,182,0.9)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh);
+      }
+    };
+    rafRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [engineRef]);
+
+  return <canvas ref={canvasRef} className={className} />;
+}
