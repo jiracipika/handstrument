@@ -202,6 +202,11 @@ export class AudioEngine {
     cowbell: Tone.Synth;
   } | null = null;
   private metronome: { synth: Tone.Synth; loop: Tone.Loop } | null = null;
+  private loopRecorder: Tone.Recorder | null = null;
+  private loopPlayer: Tone.Player | null = null;
+  private loopStopTimer: number | null = null;
+  /** UI hook: fires when a loop recording finishes processing. */
+  onLoopReady: (() => void) | null = null;
 
   async start(): Promise<void> {
     if (this.started) return;
@@ -434,8 +439,85 @@ export class AudioEngine {
     return this.analyser.getValue() as Float32Array | Float32Array[];
   }
 
+  /** True while a loop capture is in progress. */
+  get loopRecording(): boolean {
+    return this.loopStopTimer !== null;
+  }
+
+  get loopReady(): boolean {
+    return this.loopPlayer !== null;
+  }
+
+  /**
+   * Record exactly `bars` bars (4/4 at the current BPM) of everything the
+   * master bus hears. Resolves once the loop is loaded into the player.
+   */
+  async recordLoop(bars: number): Promise<boolean> {
+    if (!this.started || this.loopStopTimer !== null) return false;
+    if (!this.loopRecorder) {
+      this.loopRecorder = new Tone.Recorder();
+      this.master!.connect(this.loopRecorder);
+    }
+    this.stopLoop();
+    await this.loopRecorder.start();
+
+    const barSec = (60 / Tone.getTransport().bpm.value) * 4;
+    this.loopStopTimer = window.setTimeout(() => {
+      void (async () => {
+        const rec = this.loopRecorder!;
+        const blob = await rec.stop();
+        this.loopStopTimer = null;
+        const url = URL.createObjectURL(blob);
+        const old = this.loopPlayer;
+        this.loopPlayer = await new Promise<Tone.Player>((resolve) => {
+          const p = new Tone.Player(url, () => {
+            p.loop = true;
+            resolve(p);
+          }).toDestination();
+        });
+        old?.dispose();
+        this.onLoopReady?.();
+      })();
+    }, barSec * bars * 1000);
+    return true;
+  }
+
+  stopLoop(): void {
+    if (this.loopStopTimer !== null) {
+      clearTimeout(this.loopStopTimer);
+      this.loopStopTimer = null;
+      // Fire-and-forget stop; discard partial take.
+      void this.loopRecorder?.stop().then((blob) => {
+        void blob;
+      });
+    }
+  }
+
+  loopPlay(): void {
+    if (this.loopPlayer && this.loopPlayer.state !== 'started') this.loopPlayer.start();
+  }
+
+  loopStopPlayback(): void {
+    if (this.loopPlayer && this.loopPlayer.state === 'started') this.loopPlayer.stop();
+  }
+
+  toggleLoopPlayback(): boolean {
+    if (!this.loopPlayer) return false;
+    if (this.loopPlayer.state === 'started') {
+      this.loopStopPlayback();
+      return false;
+    }
+    this.loopPlay();
+    return true;
+  }
+
   dispose(): void {
     this.stopMetronome();
+    this.stopLoop();
+    this.loopPlayer?.dispose();
+    this.loopPlayer = null;
+    this.loopRecorder?.dispose();
+    this.loopRecorder = null;
     if (this.voices) {
       this.voices.left.poly.dispose();
       this.voices.right.poly.dispose();

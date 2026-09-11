@@ -8,10 +8,11 @@ import PerformanceHUD from './components/PerformanceHUD';
 import AudioVisualizer from './components/AudioVisualizer';
 import GestureMapper, { InstrumentPicker } from './components/GestureMapper';
 import AudioControls from './components/AudioControls';
+import LoopStation from './components/LoopStation';
 import Onboarding from './components/Onboarding';
 import type { TrackedHand } from './types';
 
-type Panel = 'mapper' | 'controls' | 'calibration';
+type Panel = 'mapper' | 'controls' | 'looper' | 'calibration';
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -177,6 +178,7 @@ export default function App() {
               [
                 ['mapper', 'Mappings'],
                 ['controls', 'Sound'],
+                ['looper', 'Looper'],
                 ['calibration', 'Calibrate'],
               ] as [Panel, string][]
             ).map(([id, label]) => (
@@ -224,6 +226,18 @@ export default function App() {
           )}
 
           {panel === 'controls' && <AudioControls engineRef={engineRef} />}
+
+          {panel === 'looper' && (
+            <div className="flex flex-col gap-3">
+              <LoopStation engineRef={engineRef} />
+              <div className="hs-card p-3 text-xs leading-relaxed text-white/60">
+                <span className="hs-label mb-1 block">How to layer</span>
+                Turn on the metronome, record one or two bars of chords with your left hand,
+                then keep the loop playing and solo with your right. Every new recording
+                replaces the previous loop.
+              </div>
+            </div>
+          )}
 
           {panel === 'calibration' && (
             <div className="flex flex-col gap-3 text-sm text-white/70">
