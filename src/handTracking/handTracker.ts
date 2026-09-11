@@ -1,4 +1,7 @@
-// MediaPipe HandLandmarker wrapper. Model assets are loaded from CDN (jsdelivr) at runtime.
+// MediaPipe HandLandmarker wrapper. WASM fileset is served locally from /public
+// (copied from the installed @mediapipe/tasks-vision package) so the JS glue and
+// WASM are always the same version — mixing the npm JS with a CDN WASM from a
+// different release silently breaks detection. Only the .task model comes from CDN.
 import {
   FilesetResolver,
   HandLandmarker,
@@ -6,10 +9,7 @@ import {
 } from '@mediapipe/tasks-vision';
 import type { TrackedHand, Vec2, HandId } from '../types';
 
-// Must match the installed @mediapipe/tasks-vision version. Pinned — @latest
-// can ship a WASM ABI mismatch with the installed JS and break detection.
-// (0.10.22 was removed from jsdelivr; the files 404 there now.)
-const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
+const WASM_BASE = '/mediapipe/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
@@ -34,7 +34,9 @@ export class HandTracker {
       });
       return { ok: true };
     } catch (e) {
-      // GPU delegate can fail on some machines; retry CPU
+      // GPU delegate can fail on some machines (older Intel GPUs, blocked
+      // WebGL); retry with the CPU delegate before giving up.
+      console.warn('[handTracker] GPU delegate failed, retrying CPU:', e);
       try {
         const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
         this.landmarker = await HandLandmarker.createFromOptions(fileset, {
@@ -54,7 +56,10 @@ export class HandTracker {
     let result: HandLandmarkerResult;
     try {
       result = this.landmarker.detectForVideo(video, timestampMs);
-    } catch {
+    } catch (e) {
+      // Surface repeated detection failures instead of swallowing them forever:
+      // a mismatched/failed WASM load shows up here as a silent empty result.
+      console.warn('[handTracker] detectForVideo threw:', e);
       return [];
     }
     const hands: TrackedHand[] = result.landmarks.map((lms, i) => {
