@@ -56,3 +56,101 @@ export function trumpetNoteForValves([one, two, three]: [boolean, boolean, boole
     '001': 'B3',
   }[key] ?? 'C4';
 }
+
+/**
+ * Adaptive exponential smoother for fingertip position (One-Euro-style):
+ * slow movements are heavily damped (kills landmark jitter), fast movements
+ * track through (keeps glissandos responsive). Outliers are clamped so a
+ * single dropped-tracking frame cannot slam the smoothed point across the
+ * frame.
+ */
+export interface SmoothedPoint {
+  (next: Vec2): Vec2;
+}
+
+export function createSmoothedPoint(start: Vec2 | number, y = 0): SmoothedPoint {
+  let x = typeof start === 'number' ? start : start.x;
+  let yy = typeof start === 'number' ? y : start.y;
+  let speed = 0;
+
+  return (next: Vec2): Vec2 => {
+    const dx = next.x - x;
+    const dy = next.y - yy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // clamp the single-frame correction so dropouts do not teleport the point
+    const damped = Math.min(dist, 0.25);
+    const scale = dist > 0.00001 ? damped / dist : 0;
+    const clampedX = x + dx * scale;
+    const clampedY = yy + dy * scale;
+
+    // faster motion -> higher alpha -> snappier tracking
+    speed = speed * 0.7 + dist * 0.3;
+    const alpha = Math.min(0.85, 0.15 + speed * 6);
+    x = x + (clampedX - x) * alpha;
+    yy = yy + (clampedY - yy) * alpha;
+    return { x, y: yy };
+  };
+}
+
+export interface KeyPressTracker {
+  /**
+   * Feed one (smoothed) fingertip sample. Returns the note to fire when a NEW
+   * key press should sound: press crosses the deep threshold, or the pressed
+   * finger slides onto a different key. Same-key re-fires are locked out
+   * until the finger lifts off the surface. Returns null when nothing fires.
+   */
+  update(point: Vec2): string | null;
+  /** Note a fresh surface calibration; old press state is stale after recalibration. */
+  reset(): void;
+}
+
+/**
+ * Hysteresis press detection: press commits only past pressY + PRESS_DEPTH,
+ * but stays committed until the finger rises above pressY + RELEASE_DEPTH
+ * (shallower). Prevents single-frame flicker around the calibration line
+ * from machine-gunning notes.
+ */
+const PRESS_DEPTH = 0.02;
+const RELEASE_DEPTH = 0.006;
+
+export function createKeyPressTracker(
+  surface: PianoSurfaceCalibration,
+  reversed = false,
+): KeyPressTracker {
+  let pressed = false;
+  let lastKey: string | null = null;
+
+  return {
+    update(point: Vec2): string | null {
+      const key = pianoKeyAt(point, surface, reversed);
+      const depth = point.y - surface.pressY;
+
+      if (!pressed) {
+        if (key && depth >= PRESS_DEPTH) {
+          pressed = true;
+          lastKey = key;
+          return key;
+        }
+        return null;
+      }
+
+      // pressed: release check uses the shallower threshold
+      if (depth < RELEASE_DEPTH) {
+        pressed = false;
+        lastKey = null;
+        return null;
+      }
+
+      // still pressed: only fire again when the key CHANGES (glissando)
+      if (key && key !== lastKey) {
+        lastKey = key;
+        return key;
+      }
+      return null;
+    },
+    reset(): void {
+      pressed = false;
+      lastKey = null;
+    },
+  };
+}
