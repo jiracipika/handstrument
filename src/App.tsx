@@ -170,18 +170,20 @@ export default function App() {
               handsRef={handsRef}
               mirror={settings.mirror}
             />
-            <div className="gesture-monitor" aria-live="polite">
-              {(['left', 'right'] as const).map((hand) => {
-                const state = hand === 'left' ? perfLeft : perfRight;
-                return (
-                  <div className={`gesture-channel ${state.tracked ? 'is-tracked' : ''}`} key={hand}>
-                    <span className={`channel-key ${hand}`}>{hand === 'left' ? 'L' : 'R'}</span>
-                    <span className="channel-value">{state.chordLabel ?? (state.tracked ? 'Ready' : 'Waiting')}</span>
-                    <span className="channel-confidence">{state.tracked ? `${Math.round(state.confidence * 100)}%` : '—'}</span>
-                  </div>
-                );
-              })}
-            </div>
+            {trackingOn && (
+              <div className="gesture-monitor" aria-live="polite">
+                {(['left', 'right'] as const).map((hand) => {
+                  const state = hand === 'left' ? perfLeft : perfRight;
+                  return (
+                    <div className={`gesture-channel ${state.tracked ? 'is-tracked' : ''}`} key={hand}>
+                      <span className={`channel-key ${hand}`}>{hand === 'left' ? 'L' : 'R'}</span>
+                      <span className="channel-value">{state.chordLabel ?? (state.tracked ? 'Ready' : 'Waiting')}</span>
+                      <span className="channel-confidence">{state.tracked ? `${Math.round(state.confidence * 100)}%` : '—'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="scope-rack">

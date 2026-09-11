@@ -52,13 +52,14 @@ export default function CameraView({
 }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   const handledStartRequestRef = useRef(startRequest);
+  const requestInFlightRef = useRef(false);
   const [active, setActive] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const cameraError = usePerf((s) => s.cameraError);
   const [perm, setPerm] = useState<PermState>('unknown');
 
   // Live permission state (where the Permissions API supports camera).
   useEffect(() => {
-    let poll: ReturnType<typeof setInterval> | undefined;
     const q = () =>
       navigator.permissions
         ?.query({ name: 'camera' as PermissionName })
@@ -69,7 +70,6 @@ export default function CameraView({
         .catch(() => {
           // Firefox/Safari don't support camera in permissions API.
           setPerm('unknown');
-          if (poll) clearInterval(poll);
         });
     void q();
     // Re-check when tab regains focus: users flip to browser settings and back.
@@ -77,7 +77,6 @@ export default function CameraView({
     window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
-      if (poll) clearInterval(poll);
     };
   }, []);
 
@@ -88,12 +87,15 @@ export default function CameraView({
   }, []);
 
   const start = useCallback(async () => {
+    if (requestInFlightRef.current) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       onError(
         'Camera is unavailable: this page must be loaded over HTTPS (or localhost). Open the https:// link directly in your browser.',
       );
       return;
     }
+    requestInFlightRef.current = true;
+    setRequesting(true);
     try {
       stop();
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -117,6 +119,9 @@ export default function CameraView({
     } catch (e) {
       const { title, fix } = describeCameraError(e);
       onError(`${title} ${fix}`);
+    } finally {
+      requestInFlightRef.current = false;
+      setRequesting(false);
     }
   }, [facing, onStream, onError, videoRef, stop]);
 
@@ -133,7 +138,7 @@ export default function CameraView({
   const insecure = typeof navigator !== 'undefined' && !navigator.mediaDevices?.getUserMedia;
 
   return (
-    <div className="group relative h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
+    <div className="camera-surface">
       <video
         ref={videoRef}
         className="h-full w-full object-cover"
@@ -143,58 +148,47 @@ export default function CameraView({
         autoPlay
       />
       {!active && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 px-5 backdrop-blur-sm">
-          <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true" className="opacity-70">
-            <rect x="3" y="10" width="28" height="22" rx="4" fill="none" stroke="#67e8f9" strokeWidth="2" />
-            <path d="M33 17 L41 12 V30 L33 25" fill="none" stroke="#67e8f9" strokeWidth="2" strokeLinejoin="round" />
-            <circle cx="17" cy="21" r="6" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
-          </svg>
-          <p className="max-w-xs text-center text-sm text-white/70">
-            Camera is off. Everything runs locally — video never leaves your device.
-          </p>
+        <div className="camera-empty" aria-busy={requesting}>
+          <div className="camera-empty-icon" aria-hidden="true">
+            <svg width="52" height="52" viewBox="0 0 52 52">
+              <rect x="5" y="13" width="32" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M40 20l8-5v22l-8-5z" fill="none" stroke="currentColor" strokeWidth="1.7" />
+              <circle cx="21" cy="26" r="7" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+            <span className={requesting ? 'is-scanning' : ''} />
+          </div>
+          <div className="camera-empty-copy">
+            <strong>{requesting ? 'Waiting for your browser' : 'Camera standing by'}</strong>
+            <p>
+              {requesting
+                ? 'Choose Allow in the camera permission prompt.'
+                : 'Video stays on this device. Only hand landmarks reach the instrument.'}
+            </p>
+          </div>
 
-          {/* Permission state hint */}
-          {!cameraError && !insecure && (
-            <p className="max-w-xs text-center text-[11px] text-white/40">
-              {perm === 'denied' ? (
-                <>
-                  Camera is <span className="text-red-300">blocked</span> for this site — allow it
-                  from the icon in the address bar, then reload.
-                </>
-              ) : perm === 'granted' ? (
-                <>Permission already granted — starting should work instantly.</>
-              ) : (
-                <>Your browser will ask for camera access when you tap below.</>
-              )}
+          {!cameraError && !insecure && !requesting && (
+            <p className="permission-status">
+              {perm === 'denied'
+                ? 'Camera is blocked for this site. Change the address-bar permission, then try again.'
+                : perm === 'granted'
+                  ? 'Camera permission is already allowed.'
+                  : 'Your browser will ask before the camera starts.'}
             </p>
           )}
 
-          <button onClick={start} className="hs-button" disabled={insecure}>
-            {insecure ? 'Camera unavailable (needs HTTPS)' : 'Enable Camera'}
+          <button onClick={() => void start()} className="hs-button" disabled={insecure || requesting}>
+            {insecure ? 'HTTPS required for camera' : requesting ? 'Permission requested…' : 'Enable camera'}
           </button>
 
-          {cameraError && (
-            <div
-              role="alert"
-              className="max-w-sm rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-center text-xs leading-relaxed text-red-200"
-            >
-              {cameraError}
-            </div>
-          )}
+          {cameraError && <div role="alert" className="camera-error">{cameraError}</div>}
         </div>
       )}
       {onSwitchCamera && active && (
-        <button
-          onClick={onSwitchCamera}
-          className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/50 px-3 py-1.5 text-xs text-white/80 backdrop-blur hover:bg-black/70"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M1 6h8M6 2.5L9.5 6 6 9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M11 3v6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            Camera
-          </span>
+        <button onClick={onSwitchCamera} className="camera-switch" aria-label="Switch camera">
+          <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+            <path d="M1.5 7.5h10M8.5 3.7l3.8 3.8-3.8 3.8M13.5 3v9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          Switch camera
         </button>
       )}
     </div>

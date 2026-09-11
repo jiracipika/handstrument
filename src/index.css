@@ -58,6 +58,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
   position: relative;
   isolation: isolate;
   display: flex;
+  height: 100dvh;
   min-height: 100dvh;
   overflow: hidden;
   flex-direction: column;
@@ -285,6 +286,21 @@ input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--hs-accen
 .privacy-block strong { display: block; font-size: 0.78rem; }
 .privacy-block p { margin: 0.25rem 0 0; color: #80aaa5; font-size: 0.7rem; line-height: 1.5; }
 
+/* Camera permission and live surface. */
+.camera-surface { position: relative; width: 100%; height: 100%; overflow: hidden; background: #030405; }
+.camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 1.2rem; background: #070a0e; text-align: center; }
+.camera-empty::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.8%, #111820 50%, transparent 50.2%), linear-gradient(transparent 49.8%, #111820 50%, transparent 50.2%); background-size: 5rem 5rem; pointer-events: none; }
+.camera-empty > * { position: relative; z-index: 1; }
+.camera-empty-icon { position: relative; display: grid; width: 5rem; height: 5rem; place-items: center; color: var(--hs-accent); border: 1px solid #24313a; background: #0b1016; }
+.camera-empty-icon > span { position: absolute; inset: auto 0.55rem 0.55rem; height: 2px; background: #34414b; }
+.camera-empty-icon > span.is-scanning { background: var(--hs-accent); animation: camera-scan 900ms ease-in-out infinite alternate; transform-origin: left; }
+.camera-empty-copy strong { display: block; font-size: 1rem; }
+.camera-empty-copy p { max-width: 28rem; margin: 0.35rem 0 0; color: #8f99a2; font-size: 0.76rem; line-height: 1.55; }
+.permission-status { max-width: 28rem; margin: 0; color: #69747e; font-size: 0.68rem; }
+.camera-error { max-width: 35rem; padding: 0.75rem 0.9rem; border: 1px solid #71363a; background: #281316; color: #ffb8bd; font-size: 0.7rem; line-height: 1.5; }
+.camera-switch { position: absolute; z-index: 8; inset: 0.8rem 0.8rem auto auto; display: inline-flex; min-height: 2.75rem; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem; border: 1px solid #46515e; background: #090c11; color: #d3d9dd; cursor: pointer; font-size: 0.69rem; }
+@keyframes camera-scan { from { transform: scaleX(0.15); } to { transform: scaleX(1); } }
+
 /* First-run setup: a compact instrument case opening over the studio. */
 .onboarding-shell { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: #050609; }
 .onboarding-shell::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 5.95rem, #0e1219 6rem); pointer-events: none; }
@@ -347,6 +363,16 @@ input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--hs-accen
 .hs-rise-3 { animation-delay: 150ms; }
 .hs-pulse { animation: hs-pulse 1.4s ease-in-out infinite; }
 
+@media (max-height: 700px) and (min-width: 801px) {
+  .onboarding-content { padding: 1.5rem 4rem; }
+  .onboarding-step h2 { font-size: 3.2rem; }
+  .gesture-composition { height: 6.4rem; margin-block-end: 0.65rem; transform: scale(0.72); transform-origin: left top; }
+  .onboarding-lead { margin-block-start: 0.8rem; font-size: 0.88rem; }
+  .onboarding-privacy { margin-block-start: 0.75rem; padding-block: 0.55rem; }
+  .onboarding-actions { margin-block-start: 0.9rem; }
+  .permission-illustration, .hand-checks, .gesture-score { margin-block-end: 0.8rem; transform: scale(0.82); transform-origin: left bottom; }
+}
+
 @media (max-width: 1100px) {
   .workbench { grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.72fr); }
   .scope-rack { grid-template-columns: 7rem minmax(0, 1fr); }
@@ -356,7 +382,7 @@ input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--hs-accen
 }
 
 @media (max-width: 800px) {
-  .studio-shell { overflow: visible; }
+  .studio-shell { height: auto; overflow: visible; }
   .studio-header { position: sticky; inset-block-start: 0; grid-template-columns: 1fr auto; min-height: 4.5rem; padding-inline: 0.85rem; }
   .header-status { display: none; }
   .brand-lockup p { display: none; }

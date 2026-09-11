@@ -2,7 +2,7 @@
 // Kept OUTSIDE React render: runs in rAF, talks to the audio engine imperatively.
 import { useCallback, useEffect, useRef } from 'react';
 import type { TrackedHand } from '../types';
-import { HandTracker } from '../handTracking/handTracker';
+import type { HandTracker } from '../handTracking/handTracker';
 import { publishLiveHands } from '../handTracking/liveHands';
 import { extractFeatures, classifyGesture } from '../handTracking/gestureRecognizer';
 import {
@@ -64,7 +64,8 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
 
   const initTracker = useCallback(async (): Promise<boolean> => {
     if (!trackerRef.current) {
-      const t = new HandTracker();
+      const { HandTracker: HandTrackerRuntime } = await import('../handTracking/handTracker');
+      const t = new HandTrackerRuntime();
       const res = await t.init();
       if (!res.ok) {
         usePerf.getState().setCameraError(`Failed to load hand tracking model: ${res.error}`);
