@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePerf } from '../stores/performanceStore';
 
 interface Props {
   onStream: (stream: MediaStream) => void;
@@ -7,6 +8,34 @@ interface Props {
   mirror: boolean;
   facing: 'user' | 'environment';
   onSwitchCamera?: () => void;
+}
+
+type PermState = 'granted' | 'denied' | 'prompt' | 'unknown';
+
+/** Human guidance per failure mode, incl. Brave-specific paths. */
+function describeCameraError(e: unknown): { title: string; fix: string } {
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    return {
+      title: 'Camera is unavailable in this context.',
+      fix: 'This page must be loaded over HTTPS (or localhost) for camera access. Open the https:// link directly in a normal browser tab.',
+    };
+  }
+  const name = (e as DOMException)?.name;
+  switch (name) {
+    case 'NotAllowedError':
+      return {
+        title: 'Camera permission was denied.',
+        fix: 'Tap the tune/lock icon next to the address bar → Permissions → allow Camera, then reload. In Brave also check brave://settings/content/camera — and on Android, Settings → Apps → Brave → Permissions → Camera.',
+      };
+    case 'NotFoundError':
+      return { title: 'No camera found on this device.', fix: 'If you are on desktop, check that a webcam is connected and enabled.' };
+    case 'NotReadableError':
+      return { title: 'The camera is in use by another app.', fix: 'Close other apps or tabs using the camera (Zoom, Meet, camera app) and try again.' };
+    case 'OverconstrainedError':
+      return { title: 'This camera does not support the requested mode.', fix: 'Try switching cameras or reloading.' };
+    default:
+      return { title: `Could not start camera: ${(e as Error)?.message ?? name ?? 'unknown error'}`, fix: 'Reload the page and try again.' };
+  }
 }
 
 export default function CameraView({
@@ -19,6 +48,33 @@ export default function CameraView({
 }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
   const [active, setActive] = useState(false);
+  const cameraError = usePerf((s) => s.cameraError);
+  const [perm, setPerm] = useState<PermState>('unknown');
+
+  // Live permission state (where the Permissions API supports camera).
+  useEffect(() => {
+    let poll: ReturnType<typeof setInterval> | undefined;
+    const q = () =>
+      navigator.permissions
+        ?.query({ name: 'camera' as PermissionName })
+        .then((p) => {
+          setPerm(p.state as PermState);
+          p.onchange = () => setPerm(p.state as PermState);
+        })
+        .catch(() => {
+          // Firefox/Safari don't support camera in permissions API.
+          setPerm('unknown');
+          if (poll) clearInterval(poll);
+        });
+    void q();
+    // Re-check when tab regains focus: users flip to browser settings and back.
+    const onFocus = () => void q();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      if (poll) clearInterval(poll);
+    };
+  }, []);
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -27,6 +83,12 @@ export default function CameraView({
   }, []);
 
   const start = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onError(
+        'Camera is unavailable: this page must be loaded over HTTPS (or localhost). Open the https:// link directly in your browser.',
+      );
+      return;
+    }
     try {
       stop();
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -48,18 +110,14 @@ export default function CameraView({
       setActive(true);
       onStream(stream);
     } catch (e) {
-      const name = (e as DOMException)?.name;
-      if (name === 'NotAllowedError') {
-        onError('Camera permission was denied. Enable it in your browser settings and reload.');
-      } else if (name === 'NotFoundError') {
-        onError('No camera was found on this device.');
-      } else {
-        onError(`Could not start camera: ${(e as Error).message}`);
-      }
+      const { title, fix } = describeCameraError(e);
+      onError(`${title} ${fix}`);
     }
   }, [facing, onStream, onError, videoRef, stop]);
 
   useEffect(() => () => stop(), [stop]);
+
+  const insecure = typeof navigator !== 'undefined' && !navigator.mediaDevices?.getUserMedia;
 
   return (
     <div className="group relative h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
@@ -72,7 +130,7 @@ export default function CameraView({
         autoPlay
       />
       {!active && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 px-5 backdrop-blur-sm">
           <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true" className="opacity-70">
             <rect x="3" y="10" width="28" height="22" rx="4" fill="none" stroke="#67e8f9" strokeWidth="2" />
             <path d="M33 17 L41 12 V30 L33 25" fill="none" stroke="#67e8f9" strokeWidth="2" strokeLinejoin="round" />
@@ -81,9 +139,35 @@ export default function CameraView({
           <p className="max-w-xs text-center text-sm text-white/70">
             Camera is off. Everything runs locally — video never leaves your device.
           </p>
-          <button onClick={start} className="hs-button">
-            Enable Camera
+
+          {/* Permission state hint */}
+          {!cameraError && !insecure && (
+            <p className="max-w-xs text-center text-[11px] text-white/40">
+              {perm === 'denied' ? (
+                <>
+                  Camera is <span className="text-red-300">blocked</span> for this site — allow it
+                  from the icon in the address bar, then reload.
+                </>
+              ) : perm === 'granted' ? (
+                <>Permission already granted — starting should work instantly.</>
+              ) : (
+                <>Your browser will ask for camera access when you tap below.</>
+              )}
+            </p>
+          )}
+
+          <button onClick={start} className="hs-button" disabled={insecure}>
+            {insecure ? 'Camera unavailable (needs HTTPS)' : 'Enable Camera'}
           </button>
+
+          {cameraError && (
+            <div
+              role="alert"
+              className="max-w-sm rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-center text-xs leading-relaxed text-red-200"
+            >
+              {cameraError}
+            </div>
+          )}
         </div>
       )}
       {onSwitchCamera && active && (
