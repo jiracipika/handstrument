@@ -6,7 +6,10 @@ import {
 } from '@mediapipe/tasks-vision';
 import type { TrackedHand, Vec2, HandId } from '../types';
 
-const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+// Must match the installed @mediapipe/tasks-vision version. Pinned — @latest
+// can ship a WASM ABI mismatch with the installed JS and break detection.
+// (0.10.22 was removed from jsdelivr; the files 404 there now.)
+const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
