@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { usePerf } from '../stores/performanceStore';
 
 interface Props {
@@ -10,6 +10,11 @@ interface Props {
   onSwitchCamera?: () => void;
   /** Incremented by a parent user action to request camera permission. */
   startRequest?: number;
+}
+
+export interface CameraViewHandle {
+  /** Invoke getUserMedia directly in the originating user gesture. */
+  start: () => Promise<void>;
 }
 
 type PermState = 'granted' | 'denied' | 'prompt' | 'unknown';
@@ -41,7 +46,7 @@ function describeCameraError(e: unknown): { title: string; fix: string } {
   }
 }
 
-export default function CameraView({
+const CameraView = forwardRef<CameraViewHandle, Props>(function CameraView({
   onStream,
   onError,
   videoRef,
@@ -49,7 +54,7 @@ export default function CameraView({
   facing,
   onSwitchCamera,
   startRequest = 0,
-}: Props) {
+}: Props, ref) {
   const streamRef = useRef<MediaStream | null>(null);
   const handledStartRequestRef = useRef(startRequest);
   const requestInFlightRef = useRef(false);
@@ -125,6 +130,8 @@ export default function CameraView({
     }
   }, [facing, onStream, onError, videoRef, stop]);
 
+  useImperativeHandle(ref, () => ({ start }), [start]);
+
   // Parent controls (notably onboarding) cannot click the covered camera button.
   // A monotonically increasing request bridges that user action to getUserMedia.
   useEffect(() => {
@@ -193,4 +200,6 @@ export default function CameraView({
       )}
     </div>
   );
-}
+});
+
+export default CameraView;

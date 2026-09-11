@@ -1,6 +1,7 @@
+import { createRef } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import CameraView from '../src/components/CameraView';
+import CameraView, { type CameraViewHandle } from '../src/components/CameraView';
 
 const trackStop = vi.fn();
 const stream = {
@@ -67,6 +68,26 @@ describe('camera permission flow', () => {
     renderCamera();
 
     fireEvent.click(screen.getByRole('button', { name: /enable camera/i }));
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+  });
+
+  it('exposes a synchronous camera request for an onboarding click', async () => {
+    const getUserMedia = installCamera();
+    const ref = createRef<CameraViewHandle>();
+    const videoRef = { current: null } as React.RefObject<HTMLVideoElement | null>;
+    render(
+      <CameraView
+        ref={ref}
+        onStream={vi.fn()}
+        onError={vi.fn()}
+        videoRef={videoRef}
+        mirror
+        facing="user"
+      />,
+    );
+
+    ref.current?.start();
 
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
   });

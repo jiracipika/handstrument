@@ -3,7 +3,7 @@ import { useSettings } from './stores/settingsStore';
 import { usePerf } from './stores/performanceStore';
 import { usePerformanceLoop } from './hooks/usePerformanceLoop';
 import { getLiveHands } from './handTracking/liveHands';
-import CameraView from './components/CameraView';
+import CameraView, { type CameraViewHandle } from './components/CameraView';
 import HandOverlay from './components/HandOverlay';
 import PerformanceHUD from './components/PerformanceHUD';
 import AudioVisualizer from './components/AudioVisualizer';
@@ -25,6 +25,7 @@ const PANELS: { id: Panel; label: string; short: string }[] = [
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraViewRef = useRef<CameraViewHandle | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const handsRef = useRef<TrackedHand[]>([]);
   const [teacherRefresh, setTeacherRefresh] = useState(0);
@@ -49,9 +50,13 @@ export default function App() {
 
   const enableCamera = useCallback(async () => {
     usePerf.getState().setCameraError(null);
-    // CameraView owns the stream. This signal reaches it even while onboarding
-    // covers the camera controls, so the browser permission prompt is not skipped.
-    setCameraStartRequest((request) => request + 1);
+    // Calling this handle from the original click preserves transient user
+    // activation in Brave/Safari. The state signal remains a mount-time fallback.
+    if (cameraViewRef.current) {
+      await cameraViewRef.current.start();
+    } else {
+      setCameraStartRequest((request) => request + 1);
+    }
   }, []);
 
   useEffect(() => {
@@ -152,6 +157,7 @@ export default function App() {
             <div className="frame-corner frame-corner-bl" aria-hidden="true" />
             <div className="frame-corner frame-corner-br" aria-hidden="true" />
             <CameraView
+              ref={cameraViewRef}
               videoRef={videoRef}
               mirror={settings.mirror}
               facing={facing}
