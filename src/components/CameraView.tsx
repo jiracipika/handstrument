@@ -8,13 +8,15 @@ interface Props {
   mirror: boolean;
   facing: 'user' | 'environment';
   onSwitchCamera?: () => void;
+  /** Incremented by a parent user action to request camera permission. */
+  startRequest?: number;
 }
 
 type PermState = 'granted' | 'denied' | 'prompt' | 'unknown';
 
-/** Human guidance per failure mode, incl. Brave-specific paths. */
+/** Human guidance per failure mode, including browser and macOS paths. */
 function describeCameraError(e: unknown): { title: string; fix: string } {
-  if (!navigator.mediaDevices?.enumerateDevices) {
+  if (!navigator.mediaDevices?.getUserMedia) {
     return {
       title: 'Camera is unavailable in this context.',
       fix: 'This page must be loaded over HTTPS (or localhost) for camera access. Open the https:// link directly in a normal browser tab.',
@@ -23,9 +25,10 @@ function describeCameraError(e: unknown): { title: string; fix: string } {
   const name = (e as DOMException)?.name;
   switch (name) {
     case 'NotAllowedError':
+    case 'SecurityError':
       return {
-        title: 'Camera permission was denied.',
-        fix: 'Tap the tune/lock icon next to the address bar → Permissions → allow Camera, then reload. In Brave also check brave://settings/content/camera — and on Android, Settings → Apps → Brave → Permissions → Camera.',
+        title: 'Camera permission is blocked.',
+        fix: 'Allow Camera in this site’s address-bar permissions, then try again. On macOS, also open System Settings → Privacy & Security → Camera and enable your browser. Brave users can also check brave://settings/content/camera.',
       };
     case 'NotFoundError':
       return { title: 'No camera found on this device.', fix: 'If you are on desktop, check that a webcam is connected and enabled.' };
@@ -45,8 +48,10 @@ export default function CameraView({
   mirror,
   facing,
   onSwitchCamera,
+  startRequest = 0,
 }: Props) {
   const streamRef = useRef<MediaStream | null>(null);
+  const handledStartRequestRef = useRef(startRequest);
   const [active, setActive] = useState(false);
   const cameraError = usePerf((s) => s.cameraError);
   const [perm, setPerm] = useState<PermState>('unknown');
@@ -114,6 +119,14 @@ export default function CameraView({
       onError(`${title} ${fix}`);
     }
   }, [facing, onStream, onError, videoRef, stop]);
+
+  // Parent controls (notably onboarding) cannot click the covered camera button.
+  // A monotonically increasing request bridges that user action to getUserMedia.
+  useEffect(() => {
+    if (startRequest === handledStartRequestRef.current) return;
+    handledStartRequestRef.current = startRequest;
+    void start();
+  }, [startRequest, start]);
 
   useEffect(() => () => stop(), [stop]);
 

@@ -13,6 +13,7 @@ import {
 } from '../handTracking/gestureSmoothing';
 import { AudioEngine } from '../audio/audioEngine';
 import { chordNoteNames, chordLabel } from '../audio/chords';
+import { classifyCustom } from '../handTracking/customGestures';
 import { useSettings } from '../stores/settingsStore';
 import { usePerf } from '../stores/performanceStore';
 
@@ -90,7 +91,13 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
         const rt = runtime.current[slot];
 
         rt.features = extractFeatures(hand.landmarks, rt.features ?? undefined, dt);
-        const match = classifyGesture(rt.features);
+        let match = classifyGesture(rt.features);
+        // Custom (taught) gestures take precedence over static classifiers
+        // when they match confidently.
+        const custom = classifyCustom(rt.features);
+        if (custom) {
+          match = { gesture: custom.id, confidence: Math.max(0.5, 1 - custom.dist / 4) };
+        }
         const cfg = {
           stabilityMs: s.stabilityMs / Math.max(s.sensitivity, 0.1),
           cooldownMs: 350,

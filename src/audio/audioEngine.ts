@@ -205,6 +205,7 @@ export class AudioEngine {
   private loopRecorder: Tone.Recorder | null = null;
   private loopPlayer: Tone.Player | null = null;
   private loopStopTimer: number | null = null;
+  private lastLoopBlobRef: Blob | null = null;
   /** UI hook: fires when a loop recording finishes processing. */
   onLoopReady: (() => void) | null = null;
 
@@ -467,6 +468,7 @@ export class AudioEngine {
         const rec = this.loopRecorder!;
         const blob = await rec.stop();
         this.loopStopTimer = null;
+        this.lastLoopBlobRef = blob;
         const url = URL.createObjectURL(blob);
         const old = this.loopPlayer;
         this.loopPlayer = await new Promise<Tone.Player>((resolve) => {
@@ -508,6 +510,24 @@ export class AudioEngine {
       return false;
     }
     this.loopPlay();
+    return true;
+  }
+
+  /** Keep the last recorded blob so it can be exported without re-capture. */
+  get lastLoopBlob(): Blob | null {
+    return this.lastLoopBlobRef;
+  }
+
+  /** Download the current loop as a .webm audio file. */
+  downloadLoop(): boolean {
+    const blob = this.lastLoopBlobRef;
+    if (!blob) return false;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `handstrument-loop-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.webm`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
     return true;
   }
 

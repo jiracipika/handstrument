@@ -120,6 +120,18 @@ export default function LoopStation({ engineRef }: { engineRef: React.MutableRef
           )}
           {playing ? 'Stop' : 'Play'}
         </button>
+        {ready && (
+          <button
+            className="hs-chip"
+            style={{ padding: '9px 14px' }}
+            title="Download loop as audio file"
+            onClick={() => engineRef.current?.downloadLoop()}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M6 1v6M3.2 4.6 6 7.4 8.8 4.6M1.5 10.5h9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
         {(recording || playing) && (
           <button className="hs-chip" style={{ padding: '9px 14px' }} onClick={stopAll}>
             ✕

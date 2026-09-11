@@ -2,14 +2,22 @@ import { useSettings } from '../stores/settingsStore';
 import { INSTRUMENTS } from '../audio/audioEngine';
 import { GESTURE_LABELS, MAPPABLE_GESTURES, NOTE_NAMES_ALL, CHORD_TYPES } from '../audio/mappings';
 import { CHORD_LABELS } from '../audio/chords';
+import { listCustomGestures } from '../handTracking/customGestures';
 import { GestureGlyph } from './GestureGlyph';
 import type { ChordAction, DrumKind, GestureId } from '../types';
 
 /** Editable gesture -> musical action mapping table (left/right). */
-export default function GestureMapper() {
+export default function GestureMapper({ refreshKey = 0 }: { refreshKey?: number }) {
   const settings = useSettings((s) => s.settings);
   const setMapping = useSettings((s) => s.setMapping);
   const clearMapping = useSettings((s) => s.clearMapping);
+  const custom = listCustomGestures();
+  void refreshKey; // parent bumps this after training a new gesture
+
+  const rows: { id: GestureId; label: string }[] = [
+    ...MAPPABLE_GESTURES.map((g) => ({ id: g, label: GESTURE_LABELS[g] ?? g })),
+    ...custom.map((c) => ({ id: c.id as GestureId, label: `★ ${c.name}` })),
+  ];
 
   const current = (hand: 'left' | 'right', g: GestureId): ChordAction | undefined =>
     (hand === 'left' ? settings.mappingLeft : settings.mappingRight)[g];
@@ -135,12 +143,12 @@ export default function GestureMapper() {
           </tr>
         </thead>
         <tbody>
-          {MAPPABLE_GESTURES.map((g) => (
+          {rows.map(({ id: g, label }) => (
             <tr key={g} className="border-t border-white/5">
               <td className="w-0 min-w-0 px-2 py-2">
                 <div className="flex items-center gap-2">
                   <GestureGlyph gesture={g} size={24} accent="#22d3ee" />
-                  <span className="truncate font-medium text-white/80">{GESTURE_LABELS[g] ?? g}</span>
+                  <span className="truncate font-medium text-white/80">{label}</span>
                 </div>
               </td>
               <td className="w-0 min-w-0 px-1.5 py-2"><ActionEditor hand="left" g={g} /></td>
