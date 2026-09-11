@@ -1,5 +1,7 @@
 import { useSettings } from '../stores/settingsStore';
 import { usePerf } from '../stores/performanceStore';
+import { SOUND_PRESETS } from '../audio/mappings';
+import type { AudioEngine } from '../audio/audioEngine';
 
 function Slider({
   label, value, display, min, max, step, onChange,
@@ -46,7 +48,7 @@ function Toggle({
 }
 
 /** Master volume / BPM / octave / effects / toggles. */
-export default function AudioControls() {
+export default function AudioControls({ engineRef }: { engineRef?: React.MutableRefObject<AudioEngine | null> }) {
   const s = useSettings((st) => st.settings);
   const set = useSettings((st) => st.set);
   const setEffect = useSettings((st) => st.setEffect);
@@ -54,8 +56,44 @@ export default function AudioControls() {
   const octR = usePerf((st) => st.octaveRight);
   const fmt = (n: number) => (n >= 0 ? `+${n}` : String(n));
 
+  const applyPreset = (id: string) => {
+    const p = SOUND_PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    set('instrumentLeft', p.instrumentLeft);
+    set('instrumentRight', p.instrumentRight);
+    if (p.effects) {
+      for (const [k, v] of Object.entries(p.effects)) {
+        setEffect(k as never, v as never);
+      }
+    }
+    if (p.masterVolume !== undefined) set('masterVolume', p.masterVolume);
+  };
+
+  const panicStop = () => {
+    engineRef?.current?.stopAll();
+    usePerf.getState().octaveShift('left', 0, 0);
+  };
+
   return (
     <div className="flex flex-col gap-4">
+      <div>
+        <div className="hs-label mb-1.5">Sound presets</div>
+        <div className="flex flex-wrap gap-2">
+          {SOUND_PRESETS.map((p) => (
+            <button key={p.id} className="hs-chip" onClick={() => applyPreset(p.id)}>
+              {p.name}
+            </button>
+          ))}
+          <button
+            className="hs-chip"
+            style={{ ['--chip-accent' as string]: '#f87171' }}
+            onClick={panicStop}
+          >
+            ■ Silence
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <Slider label="Master vol" value={s.masterVolume} display={`${s.masterVolume} dB`}
           min={-40} max={0} step={1} onChange={(v) => set('masterVolume', v)} />

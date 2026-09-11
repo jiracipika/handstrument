@@ -280,7 +280,12 @@ export class AudioEngine {
   playChord(
     hand: 'left' | 'right',
     noteNames: string[],
-    opts: { velocity?: number } = {},
+    opts: {
+      velocity?: number;
+      sustain?: boolean;
+      arpeggiator?: boolean;
+      quantize?: boolean;
+    } = {},
   ): void {
     if (!this.voices || !this.started) return;
     // Debounce: ignore identical re-triggers within 80 ms. Landmark jitter can
@@ -295,7 +300,31 @@ export class AudioEngine {
 
     const v = this.voices[hand];
     v.poly.releaseAll();
-    v.poly.triggerAttack(noteNames, Tone.now(), opts.velocity ?? 0.8);
+
+    // Quantize: start on the next 8th note when the transport runs; otherwise
+    // fall back to an immediate, tiny-offset trigger.
+    const transport = Tone.getTransport();
+    const start =
+      opts.quantize && transport.state === 'started'
+        ? transport.nextSubdivision('8n')
+        : Tone.now() + 0.01;
+
+    const velocity = opts.velocity ?? 0.8;
+
+    if (opts.arpeggiator && noteNames.length > 1) {
+      // Stagger note entries by a 16th note at the current BPM.
+      const step = Tone.Time('16n').toSeconds();
+      noteNames.forEach((n, i) => v.poly.triggerAttack(n, start + i * step, velocity));
+      return;
+    }
+
+    if (opts.sustain === false) {
+      // Non-sustain mode: fixed-duration note that releases itself.
+      v.poly.triggerAttackRelease(noteNames, '2n', start, velocity);
+      return;
+    }
+
+    v.poly.triggerAttack(noteNames, start, velocity);
   }
 
   stopHand(hand: 'left' | 'right'): void {

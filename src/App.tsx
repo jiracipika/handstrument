@@ -223,7 +223,7 @@ export default function App() {
             </>
           )}
 
-          {panel === 'controls' && <AudioControls />}
+          {panel === 'controls' && <AudioControls engineRef={engineRef} />}
 
           {panel === 'calibration' && (
             <div className="flex flex-col gap-3 text-sm text-white/70">

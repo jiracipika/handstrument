@@ -74,3 +74,100 @@ export function describeAction(a: ChordAction | undefined): string {
       return '—';
   }
 }
+
+/** Sound preset: instruments + effects + play-mode settings in one pick. */
+export interface SoundPreset {
+  id: string;
+  name: string;
+  instrumentLeft: string;
+  instrumentRight: string;
+  effects?: Partial<{
+    reverb: { enabled: boolean; wet: number };
+    delay: { enabled: boolean; wet: number };
+    chorus: { enabled: boolean; wet: number };
+    distortion: { enabled: boolean; wet: number };
+    tremolo: { enabled: boolean; wet: number };
+    phaser: { enabled: boolean; wet: number };
+  }>;
+  masterVolume?: number;
+}
+
+export const SOUND_PRESETS: SoundPreset[] = [
+  {
+    id: 'jam',
+    name: 'Instant Jam',
+    instrumentLeft: 'piano',
+    instrumentRight: 'synth',
+    effects: { reverb: { enabled: true, wet: 0.25 } },
+  },
+  {
+    id: 'ambient',
+    name: 'Ambient',
+    instrumentLeft: 'softpad',
+    instrumentRight: 'glass',
+    effects: {
+      reverb: { enabled: true, wet: 0.55 },
+      delay: { enabled: true, wet: 0.35 },
+      chorus: { enabled: true, wet: 0.4 },
+    },
+    masterVolume: -10,
+  },
+  {
+    id: 'cathedral',
+    name: 'Cathedral',
+    instrumentLeft: 'choir',
+    instrumentRight: 'vibes',
+    effects: { reverb: { enabled: true, wet: 0.8 } },
+    masterVolume: -10,
+  },
+  {
+    id: 'lofi',
+    name: 'Lo-fi',
+    instrumentLeft: 'epiano',
+    instrumentRight: 'marimba',
+    effects: {
+      reverb: { enabled: true, wet: 0.2 },
+      chorus: { enabled: true, wet: 0.3 },
+      distortion: { enabled: true, wet: 0.12 },
+      tremolo: { enabled: true, wet: 0.25 },
+    },
+    masterVolume: -8,
+  },
+  {
+    id: 'retrowave',
+    name: 'Retrowave',
+    instrumentLeft: 'strings',
+    instrumentRight: 'hardsync',
+    effects: {
+      reverb: { enabled: true, wet: 0.35 },
+      delay: { enabled: true, wet: 0.3 },
+      chorus: { enabled: true, wet: 0.5 },
+      phaser: { enabled: true, wet: 0.35 },
+    },
+    masterVolume: -12,
+  },
+  {
+    id: 'pluck',
+    name: 'Plucked',
+    instrumentLeft: 'harp',
+    instrumentRight: 'kalimba',
+    effects: { reverb: { enabled: true, wet: 0.3 }, delay: { enabled: true, wet: 0.2 } },
+    masterVolume: -6,
+  },
+  {
+    id: 'organ',
+    name: 'Organ Duo',
+    instrumentLeft: 'organ',
+    instrumentRight: 'organfull',
+    effects: { reverb: { enabled: true, wet: 0.2 }, tremolo: { enabled: true, wet: 0.2 } },
+    masterVolume: -10,
+  },
+  {
+    id: 'sub',
+    name: 'Sub & Lead',
+    instrumentLeft: 'subbass',
+    instrumentRight: 'lead',
+    effects: { reverb: { enabled: true, wet: 0.15 }, distortion: { enabled: true, wet: 0.1 } },
+    masterVolume: -8,
+  },
+];

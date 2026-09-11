@@ -1,0 +1,24 @@
+{
+  "name": "HandStrument",
+  "short_name": "HandStrument",
+  "description": "Play music with hand gestures through your camera. Chords, notes, drums, and filters controlled by hand tracking. All processing is local.",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

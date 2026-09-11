@@ -108,15 +108,21 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
         if (activated) {
           const action = mapping[activated];
           if (action && eng) {
+            const playOpts = {
+              velocity: 0.85,
+              sustain: s.sustain,
+              arpeggiator: s.arpeggiator,
+              quantize: s.quantize,
+            };
             switch (action.kind) {
               case 'chord': {
                 const notes = chordNoteNames(action.chord, s.baseOctave + octaveOffset);
-                eng.playChord(slot, notes, { velocity: 0.85 });
+                eng.playChord(slot, notes, playOpts);
                 rt.activeChord = chordLabel(action.chord);
                 break;
               }
               case 'note':
-                eng.playChord(slot, [`${action.note}${s.baseOctave + octaveOffset}`]);
+                eng.playChord(slot, [`${action.note}${s.baseOctave + octaveOffset}`], playOpts);
                 rt.activeChord = action.note;
                 break;
               case 'stop':
