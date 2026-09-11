@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSettings } from './stores/settingsStore';
 import { usePerf } from './stores/performanceStore';
 import { usePerformanceLoop } from './hooks/usePerformanceLoop';
+import { useSurfaceInstrument } from './hooks/useSurfaceInstrument';
+import type { SurfaceInstrumentMode } from './instruments/surfacePrediction';
 import { getLiveHands } from './handTracking/liveHands';
 import CameraView, { type CameraViewHandle } from './components/CameraView';
 import HandOverlay from './components/HandOverlay';
@@ -34,6 +36,7 @@ export default function App() {
       !new URLSearchParams(location.search).has('skipIntro'),
   );
   const [trackingOn, setTrackingOn] = useState(false);
+  const [surfaceMode, setSurfaceMode] = useState<SurfaceInstrumentMode>('piano');
   const [cameraStartRequest, setCameraStartRequest] = useState(0);
   const [panel, setPanel] = useState<Panel>('mapper');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
@@ -46,6 +49,12 @@ export default function App() {
   const { startAudio, initTracker, engineRef } = usePerformanceLoop({
     videoRef,
     enabled: trackingOn,
+    surfaceMode,
+  });
+  const { surface, prediction, calibrateSurface } = useSurfaceInstrument({
+    mode: surfaceMode,
+    enabled: trackingOn,
+    engineRef,
   });
 
   const enableCamera = useCallback(async () => {
@@ -230,6 +239,29 @@ export default function App() {
                     Reset map
                   </button>
                 </div>
+                <section className="surface-instrument-panel" aria-labelledby="surface-instrument-title">
+                  <div>
+                    <span className="section-kicker">Camera instrument POC</span>
+                    <h3 id="surface-instrument-title">Play a surface</h3>
+                    <p>Geometric prediction, calibrated for your camera angle. It is not a trained universal piano or trumpet recognizer.</p>
+                  </div>
+                  <div className="surface-mode-picker" role="group" aria-label="Instrument mode">
+                    <button className={surfaceMode === 'piano' ? 'is-selected' : ''} onClick={() => setSurfaceMode('piano')} aria-pressed={surfaceMode === 'piano'}>Piano surface</button>
+                    <button className={surfaceMode === 'trumpet' ? 'is-selected' : ''} onClick={() => setSurfaceMode('trumpet')} aria-pressed={surfaceMode === 'trumpet'}>Trumpet valves</button>
+                  </div>
+                  <div className="surface-readout" aria-live="polite">
+                    <strong>{prediction.label}</strong>
+                    <span>{prediction.detail}</span>
+                  </div>
+                  {surfaceMode === 'piano' ? (
+                    <div className="surface-calibration">
+                      <button className="hs-chip" onClick={calibrateSurface} disabled={!trackingOn}>Set tabletop height</button>
+                      <span>Surface line: {Math.round(surface.pressY * 100)}% down frame</span>
+                    </div>
+                  ) : (
+                    <p className="surface-help">Curl index, middle, and ring fingers as valves 1, 2, and 3. The current POC plays a single mid-register fingering map.</p>
+                  )}
+                </section>
                 <div className="instrument-pair">
                   <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} />
                   <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} />

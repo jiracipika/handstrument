@@ -1,6 +1,7 @@
 // Core performance loop: video -> tracker -> features -> gestures -> audio.
 // Kept OUTSIDE React render: runs in rAF, talks to the audio engine imperatively.
 import { useCallback, useEffect, useRef } from 'react';
+import type { SurfaceInstrumentMode } from '../instruments/surfacePrediction';
 import type { TrackedHand } from '../types';
 import type { HandTracker } from '../handTracking/handTracker';
 import { publishLiveHands } from '../handTracking/liveHands';
@@ -27,9 +28,11 @@ interface HandRuntime {
 interface UsePerformanceLoopArgs {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   enabled: boolean;
+  /** Surface modes own note triggering; keep gesture classifier for UI only. */
+  surfaceMode?: SurfaceInstrumentMode;
 }
 
-export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs) {
+export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerformanceLoopArgs) {
   const trackerRef = useRef<HandTracker | null>(null);
   const engineRef = useRef<AudioEngine | null>(new AudioEngine());
   const runtime = useRef<Record<'left' | 'right', HandRuntime>>({
@@ -113,7 +116,7 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
         const perf = usePerf.getState();
         const octaveOffset = slot === 'left' ? perf.octaveLeft : perf.octaveRight;
 
-        if (activated) {
+        if (activated && !surfaceMode) {
           const action = mapping[activated];
           if (action && eng) {
             const playOpts = {
@@ -245,7 +248,7 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
       cancelAnimationFrame(raf);
       engineRef.current?.stopAll();
     };
-  }, [enabled, videoRef]);
+  }, [enabled, surfaceMode, videoRef]);
 
   // Sync effect/volume/bpm/instrument changes into the engine
   useEffect(() => {
