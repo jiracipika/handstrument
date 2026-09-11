@@ -93,13 +93,15 @@ export interface ChordSpec {
   intervals?: number[];
 }
 
+export type DrumKind = 'kick' | 'snare' | 'hat' | 'clap' | 'tom' | 'cowbell';
+
 export type ChordAction =
   | { kind: 'chord'; chord: ChordSpec }
   | { kind: 'note'; note: NoteName }
   | { kind: 'stop' }
   | { kind: 'octaveUp' }
   | { kind: 'octaveDown' }
-  | { kind: 'drum'; drum: 'kick' | 'snare' | 'hat' | 'clap' }
+  | { kind: 'drum'; drum: DrumKind }
   | { kind: 'none' };
 
 export type HandMapping = Partial<Record<GestureId, ChordAction>>;

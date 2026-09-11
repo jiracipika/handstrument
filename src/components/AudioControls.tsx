@@ -1,71 +1,82 @@
 import { useSettings } from '../stores/settingsStore';
 import { usePerf } from '../stores/performanceStore';
 
+function Slider({
+  label, value, display, min, max, step, onChange,
+}: {
+  label: string;
+  value: number;
+  display: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="hs-card flex flex-col gap-1 p-2.5">
+      <div className="flex items-baseline justify-between">
+        <span className="hs-label">{label}</span>
+        <span className="mono text-xs text-white/75">{display}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
+function Toggle({
+  label, on, onToggle,
+}: {
+  label: string;
+  on: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <button className="hs-chip" data-on={on} onClick={() => onToggle(!on)}>
+      <span
+        className="inline-block h-2 w-2 rounded-full"
+        style={{ background: on ? 'currentColor' : 'rgba(255,255,255,0.25)' }}
+      />
+      {label}
+    </button>
+  );
+}
+
 /** Master volume / BPM / octave / effects / toggles. */
 export default function AudioControls() {
   const s = useSettings((st) => st.settings);
   const set = useSettings((st) => st.set);
   const setEffect = useSettings((st) => st.setEffect);
-  const octaves = usePerf((st) => ({ l: st.octaveLeft, r: st.octaveRight }));
+  const octL = usePerf((st) => st.octaveLeft);
+  const octR = usePerf((st) => st.octaveRight);
+  const fmt = (n: number) => (n >= 0 ? `+${n}` : String(n));
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <label className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">Master vol</span>
-          <input
-            type="range" min={-40} max={0} step={1}
-            value={s.masterVolume}
-            onChange={(e) => set('masterVolume', Number(e.target.value))}
-          />
-          <span className="font-mono text-white/70">{s.masterVolume} dB</span>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">BPM</span>
-          <input
-            type="range" min={40} max={200} step={1}
-            value={s.bpm}
-            onChange={(e) => set('bpm', Number(e.target.value))}
-          />
-          <span className="font-mono text-white/70">{s.bpm}</span>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">Base octave</span>
-          <input
-            type="range" min={2} max={6} step={1}
-            value={s.baseOctave}
-            onChange={(e) => set('baseOctave', Number(e.target.value))}
-          />
-          <span className="font-mono text-white/70">C{s.baseOctave}</span>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">Gesture stability</span>
-          <input
-            type="range" min={80} max={400} step={10}
-            value={s.stabilityMs}
-            onChange={(e) => set('stabilityMs', Number(e.target.value))}
-          />
-          <span className="font-mono text-white/70">{s.stabilityMs} ms</span>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">Sensitivity</span>
-          <input
-            type="range" min={0.5} max={1.5} step={0.05}
-            value={s.sensitivity}
-            onChange={(e) => set('sensitivity', Number(e.target.value))}
-          />
-          <span className="font-mono text-white/70">{s.sensitivity.toFixed(2)}×</span>
-        </label>
-        <div className="flex flex-col gap-1">
-          <span className="text-white/50 uppercase tracking-wider">Octave shift</span>
-          <span className="font-mono text-white/70">L {octaves.l >= 0 ? `+${octaves.l}` : octaves.l} · R {octaves.r >= 0 ? `+${octaves.r}` : octaves.r}</span>
-          <span className="text-[10px] text-white/40">change with Thumb Up / Thumb Down</span>
+      <div className="grid grid-cols-2 gap-2">
+        <Slider label="Master vol" value={s.masterVolume} display={`${s.masterVolume} dB`}
+          min={-40} max={0} step={1} onChange={(v) => set('masterVolume', v)} />
+        <Slider label="BPM" value={s.bpm} display={String(s.bpm)}
+          min={40} max={200} step={1} onChange={(v) => set('bpm', v)} />
+        <Slider label="Base octave" value={s.baseOctave} display={`C${s.baseOctave}`}
+          min={2} max={6} step={1} onChange={(v) => set('baseOctave', v)} />
+        <Slider label="Stability" value={s.stabilityMs} display={`${s.stabilityMs} ms`}
+          min={80} max={400} step={10} onChange={(v) => set('stabilityMs', v)} />
+        <Slider label="Sensitivity" value={s.sensitivity} display={`${s.sensitivity.toFixed(2)}×`}
+          min={0.5} max={1.5} step={0.05} onChange={(v) => set('sensitivity', v)} />
+        <div className="hs-card flex flex-col gap-1 p-2.5">
+          <span className="hs-label">Octave shift</span>
+          <span className="mono text-xs text-white/75">L {fmt(octL)} · R {fmt(octR)}</span>
+          <span className="text-[10px] text-white/40">Thumb Up / Thumb Down</span>
         </div>
       </div>
 
       <div>
-        <div className="mb-1.5 text-[10px] uppercase tracking-widest text-white/40">Effects</div>
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="hs-label mb-1.5">Effects</div>
+        <div className="grid grid-cols-2 gap-2">
           {(
             [
               ['reverb', 'Reverb', 'wet'],
@@ -78,46 +89,53 @@ export default function AudioControls() {
           ).map(([key, label]) => {
             const eff = s.effects[key];
             return (
-              <label key={key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
-                <input
-                  type="checkbox"
-                  checked={eff.enabled}
-                  onChange={(e) => setEffect(key, { enabled: e.target.checked })}
-                  className="accent-cyan-400"
-                />
-                <span className="flex-1">{label}</span>
+              <div
+                key={key}
+                className="hs-card flex items-center gap-2 px-2.5 py-1.5"
+                style={eff.enabled ? { borderColor: 'rgba(34,211,238,0.35)' } : undefined}
+              >
+                <button
+                  className="flex h-4 w-7 shrink-0 items-center rounded-full border border-white/15 transition-colors"
+                  style={{
+                    background: eff.enabled ? 'rgba(34,211,238,0.55)' : 'rgba(255,255,255,0.08)',
+                    borderColor: eff.enabled ? 'transparent' : undefined,
+                  }}
+                  role="switch"
+                  aria-checked={eff.enabled}
+                  aria-label={`${label} on`}
+                  onClick={() => setEffect(key, { enabled: !eff.enabled })}
+                >
+                  <span
+                    className="h-3 w-3 rounded-full bg-white transition-transform"
+                    style={{ transform: `translateX(${eff.enabled ? 12 : 2}px)` }}
+                  />
+                </button>
+                <span className={`flex-1 text-xs ${eff.enabled ? 'text-white/90' : 'text-white/45'}`}>{label}</span>
                 <input
                   type="range" min={0} max={1} step={0.05}
                   value={eff.wet}
                   onChange={(e) => setEffect(key, { wet: Number(e.target.value) })}
-                  className="w-16 accent-pink-400"
+                  className="w-14"
+                  aria-label={`${label} mix`}
                 />
-              </label>
+              </div>
             );
           })}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 text-xs">
+      <div className="flex flex-wrap gap-2">
         {(
           [
             ['sustain', 'Sustain'],
             ['mirror', 'Mirror camera'],
-            ['quantize', 'Quantize to beat'],
+            ['quantize', 'Quantize'],
             ['arpeggiator', 'Arpeggiator'],
             ['metronome', 'Metronome'],
             ['midiEnabled', 'MIDI output'],
           ] as const
         ).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={Boolean(s[key])}
-              onChange={(e) => set(key, e.target.checked as never)}
-              className="accent-cyan-400"
-            />
-            {label}
-          </label>
+          <Toggle key={key} label={label} on={Boolean(s[key])} onToggle={(v) => set(key, v as never)} />
         ))}
       </div>
     </div>

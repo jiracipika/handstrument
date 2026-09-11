@@ -9,7 +9,6 @@ import {
   newGestureState,
   updateGestureState,
   resetGestureState,
-  detectMotion,
   type HandGestureState,
 } from '../handTracking/gestureSmoothing';
 import { AudioEngine } from '../audio/audioEngine';
@@ -37,6 +36,7 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
     right: { features: null, state: newGestureState(), activeChord: null, missingSince: null },
   });
   const lastVideoTimeRef = useRef(-1);
+  const lastDetectRef = useRef(0);
   const lastFrameTRef = useRef(performance.now());
   const lastUiWriteRef = useRef(0);
   const fpsRef = useRef({ frames: 0, last: performance.now() });
@@ -99,7 +99,6 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
           missToleranceMs: 120,
         };
         const activated = updateGestureState(rt.state, match, now, cfg);
-        detectMotion(rt.state, rt.features, now, cfg);
 
         const eng = engineRef.current;
         const mapping = slot === 'left' ? s.mappingLeft : s.mappingRight;
@@ -205,6 +204,13 @@ export function usePerformanceLoop({ videoRef, enabled }: UsePerformanceLoopArgs
       const now = performance.now();
       const dt = Math.min(Math.max((now - lastFrameTRef.current) / 1000, 0.001), 0.1);
       lastFrameTRef.current = now;
+
+      // Skip inference on frames that arrived too soon after the previous one:
+      // keeps the UI thread responsive on 90–120 Hz phone displays, where video
+      // can update faster than inference can possibly run.
+      const MIN_DETECT_INTERVAL_MS = 33; // ~30 detections/sec ceiling
+      if (now - lastDetectRef.current < MIN_DETECT_INTERVAL_MS) return;
+      lastDetectRef.current = now;
 
       const hands = tracker.detect(video, t);
       publishLiveHands(hands);

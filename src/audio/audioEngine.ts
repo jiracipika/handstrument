@@ -68,7 +68,93 @@ export const INSTRUMENTS: InstrumentPreset[] = [
     id: 'softpad', name: 'Soft Pad', voice: 'Synth', gainDb: -12,
     options: { oscillator: { type: 'triangle' }, envelope: { attack: 0.6, decay: 1, sustain: 0.7, release: 2.5 } } as AnyVoiceOptions,
   },
+  {
+    id: 'glass', name: 'Glass', voice: 'FMSynth', gainDb: -14,
+    options: {
+      harmonicity: 8.04,
+      modulationIndex: 12,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.002, decay: 1.6, sustain: 0, release: 1.2 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.002, decay: 0.15, sustain: 0, release: 0.1 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'harp', name: 'Harp', voice: 'Synth', gainDb: -8,
+    options: { oscillator: { type: 'triangle' }, envelope: { attack: 0.001, decay: 1.6, sustain: 0, release: 1.2 } } as AnyVoiceOptions,
+  },
+  {
+    id: 'marimba', name: 'Marimba', voice: 'FMSynth', gainDb: -8,
+    options: {
+      harmonicity: 3.01,
+      modulationIndex: 2.2,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.55, sustain: 0, release: 0.3 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.05 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'vibes', name: 'Vibraphone', voice: 'FMSynth', gainDb: -10,
+    options: {
+      harmonicity: 4.01,
+      modulationIndex: 3.5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.002, decay: 1.8, sustain: 0, release: 1.4 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0, release: 0.2 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'choir', name: 'Choir Pad', voice: 'FMSynth', gainDb: -12,
+    options: {
+      harmonicity: 2.02,
+      modulationIndex: 1.5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.5, decay: 1, sustain: 0.85, release: 2.2 },
+      modulation: { type: 'triangle' },
+      modulationEnvelope: { attack: 0.4, decay: 0.8, sustain: 0.6, release: 1.5 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'hardsync', name: 'Hard Sync', voice: 'FMSynth', gainDb: -14,
+    options: {
+      harmonicity: 0.501,
+      modulationIndex: 18,
+      oscillator: { type: 'sawtooth' },
+      envelope: { attack: 0.01, decay: 0.35, sustain: 0.5, release: 0.4 },
+      modulation: { type: 'sawtooth' },
+      modulationEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.3 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'organfull', name: 'Full Organ', voice: 'Synth', gainDb: -15,
+    options: {
+      oscillator: { type: 'sine16' },
+      envelope: { attack: 0.02, decay: 0.1, sustain: 1, release: 0.15 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'kalimba', name: 'Kalimba', voice: 'FMSynth', gainDb: -6,
+    options: {
+      harmonicity: 5.03,
+      modulationIndex: 1.8,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.9, sustain: 0, release: 0.6 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 },
+    } as AnyVoiceOptions,
+  },
+  {
+    id: 'subbass', name: 'Sub Bass', voice: 'Synth', gainDb: -4,
+    options: {
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.02, decay: 0.8, sustain: 0.6, release: 0.5 },
+    } as AnyVoiceOptions,
+  },
 ];
+
+export type DrumId = 'kick' | 'snare' | 'hat' | 'clap' | 'tom' | 'cowbell';
 
 export function instrumentById(id: string): InstrumentPreset {
   return INSTRUMENTS.find((i) => i.id === id) ?? INSTRUMENTS[0];
@@ -112,6 +198,8 @@ export class AudioEngine {
     snare: Tone.NoiseSynth;
     hat: Tone.NoiseSynth;
     clap: Tone.NoiseSynth;
+    tom: Tone.MembraneSynth;
+    cowbell: Tone.Synth;
   } | null = null;
   private metronome: { synth: Tone.Synth; loop: Tone.Loop } | null = null;
 
@@ -152,6 +240,16 @@ export class AudioEngine {
       snare: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).connect(dg),
       hat: new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0 } }).connect(dg),
       clap: new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.001, decay: 0.15, sustain: 0 } }).connect(dg),
+      tom: new Tone.MembraneSynth({
+        pitchDecay: 0.04,
+        octaves: 2,
+        envelope: { attack: 0.001, decay: 0.35, sustain: 0, release: 0.2 },
+      }).connect(dg),
+      cowbell: new Tone.Synth({
+        oscillator: { type: 'square' },
+        envelope: { attack: 0.001, decay: 0.18, sustain: 0, release: 0.05 },
+        volume: -6,
+      }).connect(dg),
     };
 
     this.started = true;
@@ -211,10 +309,12 @@ export class AudioEngine {
     this.voices.right.poly.releaseAll();
   }
 
-  triggerDrum(d: 'kick' | 'snare' | 'hat' | 'clap'): void {
+  triggerDrum(d: DrumId): void {
     if (!this.drums || !this.started) return;
     const t = Tone.now();
     if (d === 'kick') this.drums.kick.triggerAttackRelease('C1', '8n', t);
+    else if (d === 'tom') this.drums.tom.triggerAttackRelease('G2', '8n', t);
+    else if (d === 'cowbell') this.drums.cowbell.triggerAttackRelease('G#5', '16n', t);
     else this.drums[d].triggerAttackRelease('16n', t);
   }
 

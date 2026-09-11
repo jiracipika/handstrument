@@ -2,7 +2,8 @@ import { useSettings } from '../stores/settingsStore';
 import { INSTRUMENTS } from '../audio/audioEngine';
 import { GESTURE_LABELS, MAPPABLE_GESTURES, NOTE_NAMES_ALL, CHORD_TYPES } from '../audio/mappings';
 import { CHORD_LABELS } from '../audio/chords';
-import type { ChordAction, GestureId } from '../types';
+import { GestureGlyph } from './GestureGlyph';
+import type { ChordAction, DrumKind, GestureId } from '../types';
 
 /** Editable gesture -> musical action mapping table (left/right). */
 export default function GestureMapper() {
@@ -22,10 +23,11 @@ export default function GestureMapper() {
 
   const ActionEditor = ({ hand, g }: { hand: 'left' | 'right'; g: GestureId }) => {
     const action = current(hand, g);
+    const accent = hand === 'left' ? '#22d3ee' : '#f472b6';
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
         <select
-          className="rounded-md border border-white/15 bg-black/50 px-2 py-1 text-xs text-white"
+          className="hs-select"
           value={action?.kind ?? 'none'}
           onChange={(e) => {
             const kind = e.target.value;
@@ -37,6 +39,7 @@ export default function GestureMapper() {
             else if (kind === 'drum') setMapping(hand, g, { kind: 'drum', drum: 'kick' });
             else if (kind === 'note') setMapping(hand, g, { kind: 'note', note: 'C' });
           }}
+          style={action && action.kind !== 'none' ? { borderColor: `color-mix(in oklab, ${accent} 40%, transparent)` } : undefined}
         >
           <option value="none">—</option>
           <option value="chord">Chord</option>
@@ -48,9 +51,9 @@ export default function GestureMapper() {
         </select>
 
         {action?.kind === 'chord' && (
-          <div className="flex gap-1">
+          <div className="grid min-w-0 grid-cols-2 gap-1">
             <select
-              className="rounded-md border border-white/15 bg-black/50 px-1 py-0.5 text-xs text-white"
+              className="hs-select"
               value={action.chord.root}
               onChange={(e) => setChord(hand, g, e.target.value, action.chord.type)}
             >
@@ -59,7 +62,7 @@ export default function GestureMapper() {
               ))}
             </select>
             <select
-              className="rounded-md border border-white/15 bg-black/50 px-1 py-0.5 text-xs text-white"
+              className="hs-select"
               value={action.chord.type}
               onChange={(e) => setChord(hand, g, action.chord.root, e.target.value)}
             >
@@ -71,7 +74,7 @@ export default function GestureMapper() {
         )}
         {action?.kind === 'note' && (
           <select
-            className="rounded-md border border-white/15 bg-black/50 px-1 py-0.5 text-xs text-white"
+            className="hs-select"
             value={action.note}
             onChange={(e) => setMapping(hand, g, { kind: 'note', note: e.target.value as never })}
           >
@@ -82,16 +85,16 @@ export default function GestureMapper() {
         )}
         {action?.kind === 'drum' && (
           <select
-            className="rounded-md border border-white/15 bg-black/50 px-1 py-0.5 text-xs text-white"
+            className="hs-select"
             value={action.drum}
-            onChange={(e) =>
-              setMapping(hand, g, { kind: 'drum', drum: e.target.value as 'kick' | 'snare' | 'hat' | 'clap' })
-            }
+            onChange={(e) => setMapping(hand, g, { kind: 'drum', drum: e.target.value as DrumKind })}
           >
             <option value="kick">Kick</option>
             <option value="snare">Snare</option>
             <option value="hat">Hi-hat</option>
             <option value="clap">Clap</option>
+            <option value="tom">Tom</option>
+            <option value="cowbell">Cowbell</option>
           </select>
         )}
       </div>
@@ -99,10 +102,33 @@ export default function GestureMapper() {
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-xs">
+    <div className="w-full overflow-x-auto">
+      {/* Mobile: stacked cards (fixed 3-col table can't fit 412px).
+          md+: the 3-column table. */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {MAPPABLE_GESTURES.map((g) => (
+          <div key={g} className="hs-card flex flex-col gap-2 p-2.5">
+            <div className="flex items-center gap-2">
+              <GestureGlyph gesture={g} size={24} accent="#22d3ee" />
+              <span className="text-xs font-medium text-white/80">{GESTURE_LABELS[g] ?? g}</span>
+              <span className="hs-label ml-auto">L</span>
+              <span className="hs-label">R</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <ActionEditor hand="left" g={g} />
+              <ActionEditor hand="right" g={g} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <table className="hidden w-full table-fixed text-left text-xs md:table">
+        <colgroup>
+          <col style={{ width: '38%' }} />
+          <col style={{ width: '31%' }} />
+          <col style={{ width: '31%' }} />
+        </colgroup>
         <thead>
-          <tr className="text-white/40 uppercase tracking-wider text-[10px]">
+          <tr className="hs-label">
             <th className="px-2 py-2">Gesture</th>
             <th className="px-2 py-2">Left hand</th>
             <th className="px-2 py-2">Right hand</th>
@@ -111,11 +137,14 @@ export default function GestureMapper() {
         <tbody>
           {MAPPABLE_GESTURES.map((g) => (
             <tr key={g} className="border-t border-white/5">
-              <td className="px-2 py-2 font-medium text-white/80 whitespace-nowrap">
-                {GESTURE_LABELS[g] ?? g}
+              <td className="w-0 min-w-0 px-2 py-2">
+                <div className="flex items-center gap-2">
+                  <GestureGlyph gesture={g} size={24} accent="#22d3ee" />
+                  <span className="truncate font-medium text-white/80">{GESTURE_LABELS[g] ?? g}</span>
+                </div>
               </td>
-              <td className="px-2 py-2"><ActionEditor hand="left" g={g} /></td>
-              <td className="px-2 py-2"><ActionEditor hand="right" g={g} /></td>
+              <td className="w-0 min-w-0 px-1.5 py-2"><ActionEditor hand="left" g={g} /></td>
+              <td className="w-0 min-w-0 px-1.5 py-2"><ActionEditor hand="right" g={g} /></td>
             </tr>
           ))}
         </tbody>
@@ -135,9 +164,9 @@ export function InstrumentPicker({
 }) {
   return (
     <label className="flex items-center gap-2 text-xs">
-      <span className="text-white/50 uppercase tracking-wider">{hand}</span>
+      <span className="hs-label">{hand}</span>
       <select
-        className="rounded-md border border-white/15 bg-black/50 px-2 py-1.5 text-sm text-white"
+        className="hs-select"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
