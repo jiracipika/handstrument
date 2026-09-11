@@ -13,6 +13,7 @@ import GestureMapper, { InstrumentPicker } from './components/GestureMapper';
 import AudioControls from './components/AudioControls';
 import LoopStation from './components/LoopStation';
 import GestureTeacher from './components/GestureTeacher';
+import SetupDiagrams from './components/SetupDiagrams';
 import Onboarding from './components/Onboarding';
 import type { TrackedHand } from './types';
 
@@ -36,7 +37,7 @@ export default function App() {
       !new URLSearchParams(location.search).has('skipIntro'),
   );
   const [trackingOn, setTrackingOn] = useState(false);
-  const [surfaceMode, setSurfaceMode] = useState<SurfaceInstrumentMode>('piano');
+  const [surfaceMode, setSurfaceMode] = useState<SurfaceInstrumentMode>('none');
   const [cameraStartRequest, setCameraStartRequest] = useState(0);
   const [panel, setPanel] = useState<Panel>('mapper');
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
@@ -246,6 +247,7 @@ export default function App() {
                     <p>Geometric prediction, calibrated for your camera angle. It is not a trained universal piano or trumpet recognizer.</p>
                   </div>
                   <div className="surface-mode-picker" role="group" aria-label="Instrument mode">
+                    <button className={surfaceMode === 'none' ? 'is-selected' : ''} onClick={() => setSurfaceMode('none')} aria-pressed={surfaceMode === 'none'}>Off (gestures)</button>
                     <button className={surfaceMode === 'piano' ? 'is-selected' : ''} onClick={() => setSurfaceMode('piano')} aria-pressed={surfaceMode === 'piano'}>Piano surface</button>
                     <button className={surfaceMode === 'trumpet' ? 'is-selected' : ''} onClick={() => setSurfaceMode('trumpet')} aria-pressed={surfaceMode === 'trumpet'}>Trumpet valves</button>
                   </div>
@@ -258,8 +260,10 @@ export default function App() {
                       <button className="hs-chip" onClick={calibrateSurface} disabled={!trackingOn}>Set tabletop height</button>
                       <span>Surface line: {Math.round(surface.pressY * 100)}% down frame</span>
                     </div>
-                  ) : (
+                  ) : surfaceMode === 'trumpet' ? (
                     <p className="surface-help">Curl index, middle, and ring fingers as valves 1, 2, and 3. The current POC plays a single mid-register fingering map.</p>
+                  ) : (
+                    <p className="surface-help">Surface instruments are off — your gesture mappings control the sound. Pick Piano or Trumpet above to try the tabletop POC.</p>
                   )}
                 </section>
                 <div className="instrument-pair">
@@ -310,6 +314,7 @@ export default function App() {
                   <li><span>02</span><p>Keep your wrist and fingertips inside the performance frame.</p></li>
                   <li><span>03</span><p>Hold a gesture briefly until its channel lights up.</p></li>
                 </ol>
+                <SetupDiagrams />
                 <GestureTeacher onTrained={() => setTeacherRefresh((k) => k + 1)} />
                 <div className="privacy-block">
                   <svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true">

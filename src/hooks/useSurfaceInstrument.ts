@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AudioEngine } from '../audio/audioEngine';
 import { extractFeatures } from '../handTracking/gestureRecognizer';
 import { getLiveHands } from '../handTracking/liveHands';
+import { useSettings } from '../stores/settingsStore';
 import {
   DEFAULT_PIANO_SURFACE,
   pianoKeyAt,
@@ -58,8 +59,13 @@ export function useSurfaceInstrument({
       const features = extractFeatures(hand.landmarks);
       let note: string | null;
       let detail: string;
-      if (mode === 'piano') {
-        note = pianoKeyAt(hand.landmarks[8], surface);
+      if (mode === 'none') {
+        lastNoteRef.current = null;
+        return;
+      } else if (mode === 'piano') {
+        // Reversed by default: the raw camera coords are unmirrored, so without
+        // the flip moving your hand to YOUR right descends the scale.
+        note = pianoKeyAt(hand.landmarks[8], surface, useSettings.getState().settings.mirror !== false);
         detail = note ? 'Index fingertip pressed on calibrated surface' : 'Hover, then touch the calibrated surface';
       } else {
         const valves = valveStateFromExtensions(features.extensions);
