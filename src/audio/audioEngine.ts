@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import type { EffectSettings } from '../types';
+import { DEFAULT_EFFECTS, type EffectSettings } from '../types';
 
 export interface InstrumentPreset {
   id: string;
@@ -246,6 +246,12 @@ export class AudioEngine {
     this.analyser = new Tone.Analyser('fft', 64);
     this.master.connect(this.analyser);
 
+    // Effects chain CPU: Chorus/Tremolo run LFOs and Phaser runs a 10-stage
+    // allpass cascade whether or not they're enabled (they sit BEFORE the dry/
+    // wet crossfade). On a webcam+MediaPipe workload that burns the headroom
+    // WebAudio needs to avoid dropouts. `disposed` nodes are pass-throughs in
+    // Tone, so disposing an unused effect is inaudible; applyEffects re-creates
+    // it the moment its effect is switched on.
     this.chain = {
       filter: new Tone.Filter(20000, 'lowpass'),
       dist: new Tone.Distortion(0.4),
@@ -255,6 +261,7 @@ export class AudioEngine {
       delay: new Tone.FeedbackDelay(0.25, 0.3),
       reverb: new Tone.Reverb({ decay: 2.4, wet: 0.25 }),
     };
+    this.powerDownUnused(this.chain, DEFAULT_EFFECTS);
 
     this.chain.filter.connect(this.chain.dist);
     this.chain.dist.connect(this.chain.chorus);
@@ -334,17 +341,30 @@ export class AudioEngine {
     last.time = now;
 
     const v = this.voices[hand];
-    v.poly.releaseAll();
 
-    // Quantize: start on the next 8th note when the transport runs; otherwise
-    // fall back to an immediate, tiny-offset trigger.
+    // Scheduling lookahead. MediaPipe inference stalls the main thread for
+    // 10-30ms at a time; with a 10ms lookahead a scheduled onset can land in
+    // the PAST by the time WebAudio sees it, which plays as a click/dropout.
+    // 60ms rides out those stalls; the added latency is imperceptible.
+    const LOOKAHEAD = 0.06;
+
     const transport = Tone.getTransport();
     const start =
       opts.quantize && transport.state === 'started'
-        ? transport.nextSubdivision('8n')
-        : Tone.now() + 0.01;
+        ? Math.max(transport.nextSubdivision('8n'), Tone.now() + LOOKAHEAD)
+        : Tone.now() + LOOKAHEAD;
 
     const velocity = opts.velocity ?? 0.8;
+
+    // With a quantized (future) start, releasing the previous chord NOW opens
+    // an audible gap before the new chord sounds. Schedule the release to land
+    // just before the new attack instead.
+    const leadMs = Math.max(0, (start - Tone.now()) * 1000 - 20);
+    if (leadMs > 5) {
+      window.setTimeout(() => v.poly.releaseAll(), leadMs);
+    } else {
+      v.poly.releaseAll();
+    }
 
     if (opts.arpeggiator && noteNames.length > 1) {
       // Stagger note entries by a 16th note at the current BPM.
@@ -375,11 +395,51 @@ export class AudioEngine {
 
   triggerDrum(d: DrumId): void {
     if (!this.drums || !this.started) return;
-    const t = Tone.now();
+    // Same lookahead as playChord: scheduling at Tone.now() can land the onset
+    // in the past when the main thread is mid-inference, which clicks.
+    const t = Tone.now() + 0.06;
     if (d === 'kick') this.drums.kick.triggerAttackRelease('C1', '8n', t);
     else if (d === 'tom') this.drums.tom.triggerAttackRelease('G2', '8n', t);
     else if (d === 'cowbell') this.drums.cowbell.triggerAttackRelease('G#5', '16n', t);
     else this.drums[d].triggerAttackRelease('16n', t);
+  }
+
+  /**
+   * Disposing a Tone effect disconnects it and routes audio around it, so a
+   * disposed-but-linked node is an inaudible pass-through that costs ~0 CPU.
+   * LFO-driven effects (chorus/tremolo) and multi-stage filters (phaser) burn
+   * real DSP even at wet=0 because the wet path runs before the crossfade.
+   */
+  private powerDownUnused(
+    chain: NonNullable<AudioEngine['chain']>,
+    e: EffectSettings,
+  ): void {
+    if (!e.chorus.enabled) chain.chorus.dispose();
+    if (!e.tremolo.enabled) chain.tremolo.dispose();
+    if (!e.phaser.enabled) chain.phaser.dispose();
+  }
+
+  /** Re-create a disposed chain effect after it has been switched back on. */
+  private ensureEffect(key: 'chorus' | 'tremolo' | 'phaser'): void {
+    const chain = this.chain;
+    if (!chain) return;
+    switch (key) {
+      case 'chorus':
+        if (!chain.chorus.disposed) return;
+        chain.chorus = new Tone.Chorus(4, 2.5, 0.5).start();
+        chain.chorus.connect(chain.phaser);
+        break;
+      case 'tremolo':
+        if (!chain.tremolo.disposed) return;
+        chain.tremolo = new Tone.Tremolo(4, 0.5).start();
+        chain.tremolo.connect(chain.delay);
+        break;
+      case 'phaser':
+        if (!chain.phaser.disposed) return;
+        chain.phaser = new Tone.Phaser({ frequency: 0.5, octaves: 3, baseFrequency: 350 });
+        chain.phaser.connect(chain.tremolo);
+        break;
+    }
   }
 
   applyEffects(e: EffectSettings): void {
@@ -393,6 +453,17 @@ export class AudioEngine {
     this.chain.filter.frequency.value = e.filter.enabled ? e.filter.freq : 20000;
     this.chain.tremolo.wet.value = e.tremolo.enabled ? e.tremolo.wet : 0;
     this.chain.phaser.wet.value = e.phaser.enabled ? e.phaser.wet : 0;
+    if (e.tremolo.frequency !== undefined) {
+      this.chain.tremolo.frequency.value = e.tremolo.frequency;
+    }
+    // Dispose what's off (saves the audio thread real DSP), re-create what
+    // just came back on.
+    if (!e.chorus.enabled) this.chain.chorus.dispose();
+    else this.ensureEffect('chorus');
+    if (!e.tremolo.enabled) this.chain.tremolo.dispose();
+    else this.ensureEffect('tremolo');
+    if (!e.phaser.enabled) this.chain.phaser.dispose();
+    else this.ensureEffect('phaser');
   }
 
   /** Continuous expression params per hand. */
