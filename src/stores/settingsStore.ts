@@ -19,6 +19,7 @@ function defaults(): GlobalSettings {
     bpm: 100,
     sustain: true,
     baseOctave: 4,
+    triggerMode: 'poses',
     instrumentLeft: 'piano',
     instrumentRight: 'synth',
     sensitivity: 1.0,

@@ -15,6 +15,20 @@ import {
 import { AudioEngine } from '../audio/audioEngine';
 import { chordNoteNames, chordLabel } from '../audio/chords';
 import { classifyCustom } from '../handTracking/customGestures';
+import {
+  detectFingers,
+  palmHeight,
+  palmRoll,
+  palmTilt,
+  tipSpread,
+  voicingFromMotion,
+  fingerJamChordNotes,
+  chordIndexForFinger,
+  PROGRESSION,
+  FINGER_DRUMS,
+  DRUM_REPEAT_MS,
+  type Voicing,
+} from '../handTracking/fingerJam';
 import { useSettings } from '../stores/settingsStore';
 import { usePerf } from '../stores/performanceStore';
 
@@ -23,6 +37,14 @@ interface HandRuntime {
   state: HandGestureState;
   activeChord: string | null;
   missingSince: number | null;
+  /** fingerJam: fingers held down since the last frame (for hold-to-repeat) */
+  jamFingers: Set<string>;
+  /** fingerJam: next repeat time per finger */
+  jamNextFire: Map<string, number>;
+  /** fingerJam: last voiced chord (release when fingers lift) */
+  jamChord: string | null;
+  /** fingerJam: cached voicing for label + note shaping */
+  jamVoicing: Voicing | null;
 }
 
 interface UsePerformanceLoopArgs {
@@ -32,12 +54,48 @@ interface UsePerformanceLoopArgs {
   surfaceMode?: SurfaceInstrumentMode;
 }
 
+/** Map the expression settings onto continuous engine params. */
+function buildExpression(
+  expr: { horizontal: string; pinch: string; handSize: string },
+  f: NonNullable<HandRuntime['features']>,
+): { pan?: number; filter?: number; volume?: number } {
+  const p: { pan?: number; filter?: number; volume?: number } = {};
+  if (expr.horizontal === 'pan') {
+    p.pan = (f.palmCenter.x - 0.5) * 1.6;
+  }
+  if (expr.pinch === 'filter') {
+    p.filter = 200 + Math.min(f.pinchDistance, 1.5) * 5200;
+  }
+  if (expr.handSize === 'volume') {
+    p.volume = Math.min(1.2, Math.max(0.3, (f.handSize - 0.05) * 4));
+  }
+  return p;
+}
+
 export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerformanceLoopArgs) {
   const trackerRef = useRef<HandTracker | null>(null);
   const engineRef = useRef<AudioEngine | null>(new AudioEngine());
   const runtime = useRef<Record<'left' | 'right', HandRuntime>>({
-    left: { features: null, state: newGestureState(), activeChord: null, missingSince: null },
-    right: { features: null, state: newGestureState(), activeChord: null, missingSince: null },
+    left: {
+      features: null,
+      state: newGestureState(),
+      activeChord: null,
+      missingSince: null,
+      jamFingers: new Set(),
+      jamNextFire: new Map(),
+      jamChord: null,
+      jamVoicing: null,
+    },
+    right: {
+      features: null,
+      state: newGestureState(),
+      activeChord: null,
+      missingSince: null,
+      jamFingers: new Set(),
+      jamNextFire: new Map(),
+      jamChord: null,
+      jamVoicing: null,
+    },
   });
   const lastVideoTimeRef = useRef(-1);
   const lastDetectRef = useRef(0);
@@ -84,6 +142,76 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
     let raf = 0;
     let cancelled = false;
 
+    const processJamHand = (
+      slot: 'left' | 'right',
+      hand: TrackedHand,
+      now: number,
+      eng: AudioEngine,
+    ): void => {
+      const rt = runtime.current[slot];
+      const s = settingsRef.current;
+      const side = slot === 'left' ? 'Left' : 'Right';
+      const up = detectFingers(hand.landmarks, side, Math.max(s.sensitivity, 0.1));
+
+      if (slot === 'left') {
+        // Per-finger drums: fire on NEW presses; hold-to-repeat keeps a beat.
+        for (const finger of up) {
+          const drum = FINGER_DRUMS[finger as keyof typeof FINGER_DRUMS];
+          const next = rt.jamNextFire.get(finger) ?? 0;
+          if (!rt.jamFingers.has(finger) || now >= next) {
+            eng.triggerDrum(drum);
+            rt.jamNextFire.set(finger, now + DRUM_REPEAT_MS[finger as keyof typeof DRUM_REPEAT_MS]);
+          }
+        }
+        for (const finger of [...rt.jamFingers]) {
+          if (!up.includes(finger as (typeof up)[number])) {
+            rt.jamFingers.delete(finger);
+            rt.jamNextFire.delete(finger);
+          }
+        }
+        for (const finger of up) rt.jamFingers.add(finger);
+        rt.activeChord = up.length
+          ? [...up].map((f) => FINGER_DRUMS[f]).join(' + ')
+          : null;
+        return;
+      }
+
+      // Right hand: per-finger chords + motion-shaped voicing.
+      const voicing = voicingFromMotion(
+        palmHeight(hand.landmarks),
+        up.length / 5,
+        tipSpread(hand.landmarks),
+        palmRoll(hand.landmarks),
+        palmTilt(hand.landmarks),
+      );
+      rt.jamVoicing = voicing;
+
+      const chordIdxs = up
+        .map((f) => chordIndexForFinger(f))
+        .filter((idx) => idx >= 0);
+
+      if (chordIdxs.length === 0) {
+        if (rt.jamChord !== null) {
+          eng.stopHand('right');
+          rt.jamChord = null;
+        }
+        rt.activeChord = null;
+        return;
+      }
+
+      // Lower finger index wins when several chord fingers are up (legacy
+      // behavior: the earliest progression chord takes priority).
+      const chordIdx = Math.min(...chordIdxs);
+      const notes = fingerJamChordNotes(chordIdx, voicing);
+      const key = notes.join(',');
+      if (key !== rt.jamChord) {
+        eng.playChord('right', notes, { velocity: 0.8, sustain: true });
+        rt.jamChord = key;
+      }
+      const label = `${PROGRESSION[chordIdx].label} ${voicing.label}`;
+      rt.activeChord = label;
+    };
+
     const processHands = (hands: TrackedHand[], now: number, dt: number) => {
       const s = settingsRef.current;
       const seen = new Set<'left' | 'right'>();
@@ -95,6 +223,24 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
         const rt = runtime.current[slot];
 
         rt.features = extractFeatures(hand.landmarks, rt.features ?? undefined, dt);
+
+        const eng = engineRef.current;
+        const perf = usePerf.getState();
+
+        // Finger Jam mode: per-finger triggers replace the pose classifier
+        // entirely (expression below still runs).
+        if (s.triggerMode === 'fingers') {
+          if (eng && usePerf.getState().audioReady) {
+            processJamHand(slot, hand, now, eng);
+          }
+          // continuous expression
+          if (eng && usePerf.getState().audioReady) {
+            const p = buildExpression(s.expression, rt.features);
+            eng.setExpression(slot, p);
+          }
+          continue;
+        }
+
         let match = classifyGesture(rt.features);
         // Custom (taught) gestures take precedence over static classifiers
         // when they match confidently.
@@ -111,9 +257,7 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
         };
         const activated = updateGestureState(rt.state, match, now, cfg);
 
-        const eng = engineRef.current;
         const mapping = slot === 'left' ? s.mappingLeft : s.mappingRight;
-        const perf = usePerf.getState();
         const octaveOffset = slot === 'left' ? perf.octaveLeft : perf.octaveRight;
 
         if (activated && !surfaceMode) {
@@ -157,18 +301,7 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
 
         // Continuous expression (outside React)
         if (eng && rt.features && usePerf.getState().audioReady) {
-          const expr = s.expression;
-          const p: { pan?: number; filter?: number; volume?: number } = {};
-          if (expr.horizontal === 'pan') {
-            p.pan = (rt.features.palmCenter.x - 0.5) * 1.6;
-          }
-          if (expr.pinch === 'filter') {
-            p.filter = 200 + Math.min(rt.features.pinchDistance, 1.5) * 5200;
-          }
-          if (expr.handSize === 'volume') {
-            p.volume = Math.min(1.2, Math.max(0.3, (rt.features.handSize - 0.05) * 4));
-          }
-          eng.setExpression(slot, p);
+          eng.setExpression(slot, buildExpression(s.expression, rt.features));
         }
       }
 

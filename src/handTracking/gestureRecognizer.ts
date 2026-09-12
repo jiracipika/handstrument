@@ -114,34 +114,55 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
 /**
  * Classify a static gesture from finger pattern.
  * up = [thumb, index, middle, ring, pinky]
+ *
+ * ORDER MATTERS: the weird/specific combos are checked FIRST — they are small,
+ * precise shapes that generic "count the fingers" rules would otherwise swallow
+ * (e.g. thumb+pinky folded near each other reads as "three" if counts run
+ * first). Only when no signature matches do we fall through to count-based
+ * poses. Each specific case also takes the feature vector so shape (not just
+ * finger pattern) can disambiguate: ok vs pinch, thumbUp vs thumbDown.
  */
 export function classifyGesture(f: HandFeatures): GestureMatch {
   const up = f.fingersUp;
   const count = up.filter(Boolean).length;
   const [t, i, m, r, p] = up;
 
+  // --- weird shapes first -----------------------------------------------
+  // Full hand and full fist short-circuit before the specific shapes: the
+  // "ok" signature (thumb+index+pinky) is a subset of openPalm, so the open
+  // hand must be checked first or it reads as ok.
+  if (count === 5) return { gesture: 'openPalm', confidence: 0.96 };
   if (count === 0) return { gesture: 'fist', confidence: 0.95 };
 
-  if (count === 5) return { gesture: 'openPalm', confidence: 0.96 };
+  // OK: thumb+index form a ring, pinky extended, and NOT all five up.
+  if (t && i && p && !m && !r) return { gesture: 'ok', confidence: 0.9 };
+  if (t && i && p && (m || r)) return { gesture: 'ok', confidence: 0.85 };
 
-  if (i && m && r && p && !t) return { gesture: 'four', confidence: 0.92 };
-  if (i && m && r && !p) return { gesture: 'three', confidence: 0.92 };
-  if (i && m && !r && !p) return { gesture: 'peace', confidence: 0.93 };
-  if (i && !m && !r && !p) return { gesture: 'point', confidence: 0.94 };
-
-  if (t && !i && !m && !r && !p) return { gesture: 'thumbUp', confidence: 0.85 };
-
+  // Pinch: thumb+index touching, middle/ring/pinky NOT all up. Distinguish
+  // from OK by the pinch distance: closed = pinch, open with pinky out = ok.
   if (t && i && !m && !r && !p) {
     return f.pinchDistance < 0.25
       ? { gesture: 'pinch', confidence: 0.9 }
       : { gesture: 'none', confidence: 0.4 };
   }
 
+  // Rock/horns: thumb+pinky only.
   if (t && p && !i && !m && !r) return { gesture: 'rock', confidence: 0.9 };
 
-  if (t && i && m && r && p) {
-    return { gesture: 'openPalm', confidence: 0.96 };
+  // Thumb alone: orientation picks thumbs-up vs thumbs-down. The palm-roll
+  // proxy: an inverted hand carries a flipped roll axis. If roll info is
+  // inconclusive, default to thumbUp (classic "liked" pose).
+  if (t && !i && !m && !r && !p) {
+    return Math.abs(f.rollAngle) > 2.2
+      ? { gesture: 'thumbDown', confidence: 0.8 }
+      : { gesture: 'thumbUp', confidence: 0.85 };
   }
+
+  // --- generic count-based poses ----------------------------------------
+  if (i && m && r && p && !t) return { gesture: 'four', confidence: 0.92 };
+  if (i && m && r && !p) return { gesture: 'three', confidence: 0.92 };
+  if (i && m && !r && !p) return { gesture: 'peace', confidence: 0.93 };
+  if (i && !m && !r && !p) return { gesture: 'point', confidence: 0.94 };
 
   return { gesture: 'none', confidence: 0 };
 }

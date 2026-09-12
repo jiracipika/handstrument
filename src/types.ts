@@ -147,6 +147,8 @@ export interface GlobalSettings {
   bpm: number;
   sustain: boolean;
   baseOctave: number; // 1..6
+  /** 'poses' = static gesture classifier; 'fingers' = legacy per-finger jam (drums left, chords right) */
+  triggerMode: 'poses' | 'fingers';
   instrumentLeft: string;
   instrumentRight: string;
   sensitivity: number; // 0.5..1.5 gesture recognition sensitivity

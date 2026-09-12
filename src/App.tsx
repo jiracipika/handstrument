@@ -248,6 +248,33 @@ export default function App() {
                     Reset map
                   </button>
                 </div>
+                <section className="surface-instrument-panel" aria-labelledby="trigger-mode-title">
+                  <div>
+                    <span className="section-kicker">Trigger mode</span>
+                    <h3 id="trigger-mode-title">How hands make sound</h3>
+                    <p>
+                      {settings.triggerMode === 'fingers'
+                        ? 'Finger Jam — each finger is its own trigger. Left hand drums (thumb kick, index hat, middle snare, ring clap, pinky tom, hold to repeat). Right hand plays the Bm9-Gmaj7-Em7-F#7 progression one chord per finger; raise, open, spread, and tilt your hand to reshape the chord voicing live.'
+                        : 'Poses — hold a hand shape to fire its mapped chord or drum. Fine-tune each pose below.'}
+                    </p>
+                  </div>
+                  <div className="surface-mode-picker" role="group" aria-label="Trigger mode">
+                    <button
+                      className={settings.triggerMode === 'poses' ? 'is-selected' : ''}
+                      onClick={() => set('triggerMode', 'poses')}
+                      aria-pressed={settings.triggerMode === 'poses'}
+                    >
+                      Poses
+                    </button>
+                    <button
+                      className={settings.triggerMode === 'fingers' ? 'is-selected' : ''}
+                      onClick={() => set('triggerMode', 'fingers')}
+                      aria-pressed={settings.triggerMode === 'fingers'}
+                    >
+                      Finger Jam (legacy)
+                    </button>
+                  </div>
+                </section>
                 <section className="surface-instrument-panel" aria-labelledby="surface-instrument-title">
                   <div>
                     <span className="section-kicker">Camera instrument POC</span>
