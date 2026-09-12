@@ -105,13 +105,15 @@ export interface KeyPressTracker {
 }
 
 /**
- * Hysteresis press detection: press commits only past pressY + PRESS_DEPTH,
- * but stays committed until the finger rises above pressY + RELEASE_DEPTH
- * (shallower). Prevents single-frame flicker around the calibration line
- * from machine-gunning notes.
+ * Hysteresis press detection, tuned to the calibration semantics: "Set tabletop
+ * height" captures the fingertip TOUCHING the table, so the fire threshold sits
+ * just past that touch (+0.008) — the physical press is the transition onto the
+ * table, not a push through it (the table is solid; the finger cannot travel
+ * far below the calibrated line). The press state re-arms only after a visible
+ * lift above the line (−0.01), so hover flicker cannot machine-gun notes.
  */
-const PRESS_DEPTH = 0.02;
-const RELEASE_DEPTH = 0.006;
+const PRESS_DEPTH = 0.008;
+const RELEASE_DEPTH = -0.01;
 
 export function createKeyPressTracker(
   surface: PianoSurfaceCalibration,

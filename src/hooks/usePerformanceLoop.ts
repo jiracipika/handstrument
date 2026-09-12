@@ -214,7 +214,17 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
       raf = requestAnimationFrame(loop);
       const video = videoRef.current;
       const tracker = trackerRef.current;
-      if (!video || !tracker || video.readyState < 2) return;
+      if (!video || !tracker) return;
+      // Dead video feed (track ended, OS revoked camera, device glitch): the
+      // video time freezes but landmarks buffer would keep the last skeleton
+      // on screen forever and hold surface notes. Publish empty hands once.
+      if (video.readyState < 2) {
+        if (lastVideoTimeRef.current !== -2) {
+          lastVideoTimeRef.current = -2;
+          publishLiveHands([]);
+        }
+        return;
+      }
       if (video.currentTime === lastVideoTimeRef.current) return;
       lastVideoTimeRef.current = video.currentTime;
 

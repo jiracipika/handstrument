@@ -86,6 +86,7 @@ export function useSurfaceInstrument({
 
       if (mode === 'none') {
         lastNoteRef.current = null;
+        setPrediction({ label: 'Surface off', detail: 'Your gesture mappings control the sound', active: false });
         return;
       } else if (mode === 'piano') {
         const reversed = useSettings.getState().settings.mirror !== false;
