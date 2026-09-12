@@ -44,6 +44,13 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
     onDone();
   };
 
+  const finishWithAudio = async () => {
+    // Audio needs a user gesture; this click is the last chance before the
+    // studio, where a muted app would look broken (see scope-rack fallback).
+    await onStartAudio().catch(() => undefined);
+    finish();
+  };
+
   const requestCamera = async () => {
     setCameraRequested(true);
     await onEnableCamera();
@@ -77,7 +84,7 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
               <PrivacyNote />
               <div className="onboarding-actions">
                 <button className="hs-button" onClick={() => setStep(1)}>Set up my stage</button>
-                <button className="text-action" onClick={finish}>Explore without setup</button>
+                <button className="text-action" onClick={() => void finishWithAudio()}>Explore without setup</button>
               </div>
             </div>
           )}
@@ -146,7 +153,7 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
               <h2 id="onboarding-title">Hold a shape. Hear it answer.</h2>
               <p className="onboarding-lead">Start with an open palm, then move through the shapes. Keep each gesture steady for a beat.</p>
               <div className="onboarding-actions">
-                <button className="hs-button" onClick={finish}>Enter the studio</button>
+                <button className="hs-button" onClick={() => void finishWithAudio()}>Enter the studio</button>
                 <button className="text-action" onClick={() => setStep(2)}>Back to camera check</button>
               </div>
             </div>

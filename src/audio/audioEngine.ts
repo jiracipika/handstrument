@@ -211,7 +211,36 @@ export class AudioEngine {
 
   async start(): Promise<void> {
     if (this.started) return;
-    await Tone.start();
+    // Tone.start() resumes the AudioContext. On some setups (headless, HDMI/
+    // Bluetooth handoff, sample-rate mismatches) resume() never settles, which
+    // used to hang this whole method and leave the app silently "muted" with a
+    // dead UI. Race it with a short timeout: if the context is still suspended
+    // the graph is still built — the moment resume() completes later, sound
+    // flows without any further user action.
+    const AudioCtxCtor = window.AudioContext;
+    let resumeSettled = true;
+    if (AudioCtxCtor) {
+      try {
+        const probe = new AudioCtxCtor();
+        resumeSettled = await Promise.race([
+          probe.resume().then(() => true).catch(() => false),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)),
+        ]);
+        void probe.close().catch(() => undefined);
+      } catch {
+        resumeSettled = false;
+      }
+    }
+    try {
+      if (resumeSettled) {
+        await Tone.start();
+      } else {
+        // kick Tone's resume without awaiting it
+        void Tone.start().catch(() => undefined);
+      }
+    } catch {
+      // constructing the graph must not be blocked by a stubborn context
+    }
 
     this.master = new Tone.Gain(0.8).toDestination();
     this.analyser = new Tone.Analyser('fft', 64);

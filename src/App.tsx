@@ -203,10 +203,18 @@ export default function App() {
           </div>
 
           <div className="scope-rack">
-            <div className="scope-copy">
+            <button
+              type="button"
+              className="scope-copy audio-arm-toggle"
+              onClick={() => void handleStart()}
+              aria-label={audioReady ? 'Audio is on' : 'Turn audio on'}
+              title={audioReady ? 'Audio is on' : 'Browsers need a click before audio can play — click here'}
+            >
               <span>Output monitor</span>
-              <strong>{audioReady ? 'Audio armed' : 'Audio muted'}</strong>
-            </div>
+              <strong className={audioReady ? 'is-audio-on' : 'is-audio-off'}>
+                {audioReady ? 'Audio on — click to test' : 'Audio muted — click to enable'}
+              </strong>
+            </button>
             <AudioVisualizer engineRef={engineRef} className="scope-canvas" />
             <PerformanceHUD />
           </div>
