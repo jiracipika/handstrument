@@ -23,6 +23,9 @@ export class HandTracker {
   private landmarker: HandLandmarker | null = null;
 
   async init(): Promise<TrackerInitResult> {
+    if (this.gpuBlacklisted) {
+      return this.reinit('CPU');
+    }
     try {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
       this.landmarker = await HandLandmarker.createFromOptions(fileset, {
@@ -41,6 +44,11 @@ export class HandTracker {
       return this.reinit('CPU');
     }
   }
+
+  /** Once WebGL inference has failed mid-session, never go back to GPU. */
+  private gpuBlacklisted = false;
+  /** Milliseconds to wait before another recovery rebuild. */
+  private lastRebuildAt = 0;
 
   /** Rebuild the landmarker on the given delegate (recovery path). */
   private async reinit(delegate: 'GPU' | 'CPU'): Promise<TrackerInitResult> {
@@ -69,6 +77,13 @@ export class HandTracker {
       // tracking silently die mid-session. Recover once: rebuild on the CPU
       // delegate; if that also fails, surface it.
       console.warn('[handTracker] detectForVideo threw, rebuilding on CPU:', e);
+      this.gpuBlacklisted = true;
+      const now = Date.now();
+      if (now - this.lastRebuildAt < 2000) {
+        // Still rebuilding (model load takes a moment) — drop this frame.
+        return [];
+      }
+      this.lastRebuildAt = now;
       this.reinit('CPU').then((res) => {
         if (!res.ok) {
           usePerf.getState().setCameraError(
