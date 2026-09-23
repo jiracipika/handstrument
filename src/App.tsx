@@ -115,7 +115,7 @@ export default function App() {
           </div>
           <div>
             <h1>HandStrument</h1>
-            <p>Gesture performance studio</p>
+            <p>Gesture instrument lab</p>
           </div>
         </div>
 

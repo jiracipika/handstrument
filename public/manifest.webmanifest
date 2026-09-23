@@ -1,7 +1,7 @@
 {
   "name": "HandStrument",
   "short_name": "HandStrument",
-  "description": "Play music with hand gestures through your camera. Chords, notes, drums, and filters controlled by hand tracking. All processing is local.",
+  "description": "The gesture instrument lab. Play chords, notes, drums, and surface instruments (air piano) through webcam hand tracking. All processing is local.",
   "start_url": "/?source=pwa",
   "display": "standalone",
   "orientation": "any",

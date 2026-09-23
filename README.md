@@ -1,10 +1,18 @@
 # HandStrument 🎶✋
 
+**Live: https://handstrument-two.vercel.app** · The **gesture instrument lab**.
+
 Turn your webcam into a musical instrument. Hand gestures — tracked entirely in your
 browser — play chords, notes, and drums, while continuous hand motion sweeps filters,
 pans sound, and shifts octaves. No touchscreens, no hardware, no uploads.
 
 **🔒 Camera processing happens locally on your device. Video is not uploaded or stored.**
+
+> **Sibling product:** FingerJam (https://fingerjam.vercel.app,
+> [source](https://github.com/jiracipika/fingerjam)) is the *jam studio* — finger-drum
+> patterns on the left hand, preset chord progressions on the right, 3D rave visuals.
+> HandStrument is the *instrument lab* — per-gesture sound mappings, custom taught
+> gestures, a loop recorder, and calibrated surface instruments like the air piano.
 
 ## Stack
 
