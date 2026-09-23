@@ -8,6 +8,7 @@ import {
   type HandLandmarkerResult,
 } from '@mediapipe/tasks-vision';
 import type { TrackedHand, Vec2, HandId } from '../types';
+import { usePerf } from '../stores/performanceStore';
 
 const WASM_BASE = '/mediapipe/wasm';
 const MODEL_URL =
@@ -37,17 +38,22 @@ export class HandTracker {
       // GPU delegate can fail on some machines (older Intel GPUs, blocked
       // WebGL); retry with the CPU delegate before giving up.
       console.warn('[handTracker] GPU delegate failed, retrying CPU:', e);
-      try {
-        const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-        this.landmarker = await HandLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
-          runningMode: 'VIDEO',
-          numHands: 2,
-        });
-        return { ok: true };
-      } catch (e2) {
-        return { ok: false, error: String(e2) };
-      }
+      return this.reinit('CPU');
+    }
+  }
+
+  /** Rebuild the landmarker on the given delegate (recovery path). */
+  private async reinit(delegate: 'GPU' | 'CPU'): Promise<TrackerInitResult> {
+    try {
+      const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+      this.landmarker = await HandLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate },
+        runningMode: 'VIDEO',
+        numHands: 2,
+      });
+      return { ok: true };
+    } catch (e2) {
+      return { ok: false, error: String(e2) };
     }
   }
 
@@ -57,9 +63,19 @@ export class HandTracker {
     try {
       result = this.landmarker.detectForVideo(video, timestampMs);
     } catch (e) {
-      // Surface repeated detection failures instead of swallowing them forever:
-      // a mismatched/failed WASM load shows up here as a silent empty result.
-      console.warn('[handTracker] detectForVideo threw:', e);
+      // detectForVideo throws when the landmarker instance is wedged — most
+      // often a lost WebGL context under the GPU delegate (identical
+      // timestamps, GPU reset, driver hiccup). Returning [] forever here made
+      // tracking silently die mid-session. Recover once: rebuild on the CPU
+      // delegate; if that also fails, surface it.
+      console.warn('[handTracker] detectForVideo threw, rebuilding on CPU:', e);
+      this.reinit('CPU').then((res) => {
+        if (!res.ok) {
+          usePerf.getState().setCameraError(
+            `Hand tracking crashed and could not recover: ${res.error}`,
+          );
+        }
+      });
       return [];
     }
     const hands: TrackedHand[] = result.landmarks.map((lms, i) => {
