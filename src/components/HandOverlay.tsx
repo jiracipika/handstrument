@@ -13,10 +13,10 @@ const CONNECTIONS: [number, number][] = [
 const FINGER_TIPS = [4, 8, 12, 16, 20];
 
 /** Fingertip index into the per-hand palette. */
-const LEFT_COLORS = ['#22d3ee', '#67e8f9', '#22d3ee', '#0891b2', '#155e75'];
-const RIGHT_COLORS = ['#f472b6', '#fbcfe8', '#f472b6', '#db2777', '#9d174d'];
-const LEFT_STROKE = '#22d3ee';
-const RIGHT_STROKE = '#f472b6';
+const LEFT_COLORS = ['#b9f976', '#67e8f9', '#b9f976', '#0891b2', '#155e75'];
+const RIGHT_COLORS = ['#ae90ff', '#fbcfe8', '#ae90ff', '#db2777', '#9d174d'];
+const LEFT_STROKE = '#b9f976';
+const RIGHT_STROKE = '#ae90ff';
 
 interface Props {
   videoRef: React.RefObject<HTMLVideoElement | null>;

@@ -16,7 +16,7 @@ const DEVICES: { id: Device; label: string; hint: string }[] = [
 function Diagram({ device }: { device: Device }) {
   // Side view: person on the left, device on the right, sight cone from camera.
   const stroke = 'rgba(255,255,255,0.55)';
-  const accent = '#22d3ee';
+  const accent = '#b9f976';
   const soft = 'rgba(34,211,238,0.14)';
   return (
     <svg viewBox="0 0 200 120" className="setup-diagram" role="img" aria-label={`${device} setup side view`}>

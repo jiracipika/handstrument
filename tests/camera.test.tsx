@@ -65,11 +65,14 @@ describe('camera permission flow', () => {
 
   it('requests camera from a direct user click', async () => {
     const getUserMedia = installCamera();
-    renderCamera();
+    const onStartAudio = vi.fn().mockResolvedValue(undefined);
+    const videoRef = { current: null } as React.RefObject<HTMLVideoElement | null>;
+    render(<CameraView onStream={vi.fn()} onError={vi.fn()} videoRef={videoRef} mirror facing="user" onStartAudio={onStartAudio} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /enable camera/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start camera \+ sound/i }));
 
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    expect(onStartAudio).toHaveBeenCalledTimes(1);
   });
 
   it('exposes a synchronous camera request for an onboarding click', async () => {

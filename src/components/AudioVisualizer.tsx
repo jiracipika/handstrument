@@ -38,13 +38,11 @@ export default function AudioVisualizer({ engineRef, className }: Props) {
           const db = spec[idx];
           v = Math.max(0, Math.min(1, (db + 90) / 90));
         }
-        // idle gentle wave when silent
-        const idle = 0.03 + 0.02 * Math.sin(Date.now() / 400 + i * 0.4);
-        const val = Math.max(v, idle);
-        const bh = val * (h - 6);
+        // Keep the monitor quiet until the analyser reports actual audio.
+        const bh = v * (h - 6);
         const grad = ctx.createLinearGradient(0, h, 0, h - bh);
-        grad.addColorStop(0, 'rgba(34,211,238,0.9)');
-        grad.addColorStop(1, 'rgba(244,114,182,0.9)');
+        grad.addColorStop(0, 'rgba(185,249,118,0.9)');
+        grad.addColorStop(1, 'rgba(174,144,255,0.9)');
         ctx.fillStyle = grad;
         ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh);
       }

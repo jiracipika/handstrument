@@ -60,7 +60,7 @@ function GestureGlyphBase({ fingers, accent }: { fingers: [boolean, boolean, boo
   );
 }
 
-export function GestureGlyph({ gesture, size, accent = '#22d3ee' }: { gesture: GestureId; size?: number; accent?: string }) {
+export function GestureGlyph({ gesture, size, accent = '#b9f976' }: { gesture: GestureId; size?: number; accent?: string }) {
   const fingers = F[gesture];
   if (gesture === 'pinch' || gesture === 'ok') {
     // Circle formed by thumb + index, remaining fingers folded.
