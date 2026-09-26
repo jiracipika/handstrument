@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { DEFAULT_EFFECTS, type EffectSettings } from '../types';
+import type { EffectSettings } from '../types';
 
 export interface InstrumentPreset {
   id: string;
@@ -152,6 +152,22 @@ export const INSTRUMENTS: InstrumentPreset[] = [
       envelope: { attack: 0.02, decay: 0.8, sustain: 0.6, release: 0.5 },
     } as AnyVoiceOptions,
   },
+  { id: 'flute', name: 'Air Flute', voice: 'Synth', gainDb: -9,
+    options: { oscillator: { type: 'sine' }, envelope: { attack: 0.08, decay: 0.15, sustain: 0.8, release: 0.45 } } as AnyVoiceOptions },
+  { id: 'brass', name: 'Warm Brass', voice: 'Synth', gainDb: -16,
+    options: { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.09, decay: 0.24, sustain: 0.7, release: 0.36 } } as AnyVoiceOptions },
+  { id: 'celesta', name: 'Celesta', voice: 'FMSynth', gainDb: -11,
+    options: { harmonicity: 4.02, modulationIndex: 2.5, oscillator: { type: 'sine' },
+      envelope: { attack: 0.002, decay: 1.1, sustain: 0, release: 0.8 }, modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.12 } } as AnyVoiceOptions },
+  { id: 'chiptune', name: '8-Bit Pulse', voice: 'Synth', gainDb: -18,
+    options: { oscillator: { type: 'pulse' }, envelope: { attack: 0.003, decay: 0.16, sustain: 0.45, release: 0.11 } } as AnyVoiceOptions },
+  { id: 'dream', name: 'Dream Keys', voice: 'FMSynth', gainDb: -12,
+    options: { harmonicity: 1.01, modulationIndex: 1.3, oscillator: { type: 'sine' },
+      envelope: { attack: 0.08, decay: 1.1, sustain: 0.45, release: 1.4 }, modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.03, decay: 0.5, sustain: 0.12, release: 0.8 } } as AnyVoiceOptions },
+  { id: 'mallet', name: 'Soft Mallet', voice: 'Synth', gainDb: -9,
+    options: { oscillator: { type: 'sine4' }, envelope: { attack: 0.002, decay: 0.48, sustain: 0, release: 0.28 } } as AnyVoiceOptions },
 ];
 
 export type DrumId = 'kick' | 'snare' | 'hat' | 'clap' | 'tom' | 'cowbell';
@@ -166,7 +182,7 @@ export function buildPoly(instrumentId: string): Tone.PolySynth {
     preset.voice === 'FMSynth'
       ? new Tone.PolySynth(Tone.FMSynth)
       : new Tone.PolySynth(Tone.Synth);
-  poly.maxPolyphony = 16;
+  poly.maxPolyphony = 10;
   poly.set(preset.options as never);
   return poly;
 }
@@ -181,7 +197,8 @@ export class AudioEngine {
     left: { notes: '', time: 0 },
     right: { notes: '', time: 0 },
   };
-  private voices: Record<'left' | 'right', { poly: Tone.PolySynth; gain: Tone.Gain; panner: Tone.Panner; filter: Tone.Filter }> | null = null;
+  private voices: Record<'left' | 'right', { id: string; poly: Tone.PolySynth; gain: Tone.Gain; panner: Tone.Panner; filter: Tone.Filter }> | null = null;
+  private effectsActive = { chorus: false, tremolo: false };
   private master: Tone.Gain | null = null;
   private chain: {
     filter: Tone.Filter;
@@ -211,57 +228,24 @@ export class AudioEngine {
 
   async start(): Promise<void> {
     if (this.started) return;
-    // Tone.start() resumes the AudioContext. On some setups (headless, HDMI/
-    // Bluetooth handoff, sample-rate mismatches) resume() never settles, which
-    // used to hang this whole method and leave the app silently "muted" with a
-    // dead UI. Race it with a short timeout: if the context is still suspended
-    // the graph is still built — the moment resume() completes later, sound
-    // flows without any further user action.
-    const AudioCtxCtor = window.AudioContext;
-    let resumeSettled = true;
-    if (AudioCtxCtor) {
-      try {
-        const probe = new AudioCtxCtor();
-        resumeSettled = await Promise.race([
-          probe.resume().then(() => true).catch(() => false),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)),
-        ]);
-        void probe.close().catch(() => undefined);
-      } catch {
-        resumeSettled = false;
-      }
-    }
-    try {
-      if (resumeSettled) {
-        await Tone.start();
-      } else {
-        // kick Tone's resume without awaiting it
-        void Tone.start().catch(() => undefined);
-      }
-    } catch {
-      // constructing the graph must not be blocked by a stubborn context
-    }
+    // Resume the actual output context from the user's click. Probing with a
+    // second AudioContext delays startup and says nothing about Tone's context.
+    await Tone.start();
 
     this.master = new Tone.Gain(0.8).toDestination();
     this.analyser = new Tone.Analyser('fft', 64);
     this.master.connect(this.analyser);
 
-    // Effects chain CPU: Chorus/Tremolo run LFOs and Phaser runs a 10-stage
-    // allpass cascade whether or not they're enabled (they sit BEFORE the dry/
-    // wet crossfade). On a webcam+MediaPipe workload that burns the headroom
-    // WebAudio needs to avoid dropouts. `disposed` nodes are pass-throughs in
-    // Tone, so disposing an unused effect is inaudible; applyEffects re-creates
-    // it the moment its effect is switched on.
+    // Keep the signal path connected; disposing a node disconnects the bus.
     this.chain = {
       filter: new Tone.Filter(20000, 'lowpass'),
       dist: new Tone.Distortion(0.4),
-      chorus: new Tone.Chorus(4, 2.5, 0.5).start(),
+      chorus: new Tone.Chorus(4, 2.5, 0.5),
       phaser: new Tone.Phaser({ frequency: 0.5, octaves: 3, baseFrequency: 350 }),
-      tremolo: new Tone.Tremolo(4, 0.5).start(),
+      tremolo: new Tone.Tremolo(4, 0.5),
       delay: new Tone.FeedbackDelay(0.25, 0.3),
       reverb: new Tone.Reverb({ decay: 2.4, wet: 0.25 }),
     };
-    this.powerDownUnused(this.chain, DEFAULT_EFFECTS);
 
     this.chain.filter.connect(this.chain.dist);
     this.chain.dist.connect(this.chain.chorus);
@@ -305,18 +289,22 @@ export class AudioEngine {
     filter.connect(panner);
     panner.connect(gain);
     gain.connect(this.chain!.filter);
-    return { poly: buildPoly(instrumentId), gain, panner, filter };
+    const poly = buildPoly(instrumentId);
+    poly.connect(filter);
+    return { id: instrumentId, poly, gain, panner, filter };
   }
 
   setInstrument(hand: 'left' | 'right', instrumentId: string): void {
     if (!this.voices || !this.started) return;
     const old = this.voices[hand];
+    if (old.id === instrumentId) return;
     old.poly.releaseAll();
     old.poly.dispose();
     old.filter.dispose();
     old.panner.dispose();
     old.gain.dispose();
     this.voices[hand] = this.buildVoice(instrumentId);
+    this.lastChordNotes[hand] = { notes: '', time: 0 };
   }
 
   playChord(
@@ -342,11 +330,9 @@ export class AudioEngine {
 
     const v = this.voices[hand];
 
-    // Scheduling lookahead. MediaPipe inference stalls the main thread for
-    // 10-30ms at a time; with a 10ms lookahead a scheduled onset can land in
-    // the PAST by the time WebAudio sees it, which plays as a click/dropout.
-    // 60ms rides out those stalls; the added latency is imperceptible.
-    const LOOKAHEAD = 0.06;
+    // Inference already ran before this call. Keep audio scheduling short so
+    // the instrument feels responsive instead of adding 60ms to every note.
+    const LOOKAHEAD = 0.012;
 
     const transport = Tone.getTransport();
     const start =
@@ -359,12 +345,7 @@ export class AudioEngine {
     // With a quantized (future) start, releasing the previous chord NOW opens
     // an audible gap before the new chord sounds. Schedule the release to land
     // just before the new attack instead.
-    const leadMs = Math.max(0, (start - Tone.now()) * 1000 - 20);
-    if (leadMs > 5) {
-      window.setTimeout(() => v.poly.releaseAll(), leadMs);
-    } else {
-      v.poly.releaseAll();
-    }
+    v.poly.releaseAll(Math.max(Tone.now(), start - 0.005));
 
     if (opts.arpeggiator && noteNames.length > 1) {
       // Stagger note entries by a 16th note at the current BPM.
@@ -385,61 +366,26 @@ export class AudioEngine {
   stopHand(hand: 'left' | 'right'): void {
     if (!this.voices || !this.started) return;
     this.voices[hand].poly.releaseAll();
+    this.lastChordNotes[hand] = { notes: '', time: 0 };
   }
 
   stopAll(): void {
     if (!this.voices) return;
     this.voices.left.poly.releaseAll();
     this.voices.right.poly.releaseAll();
+    this.lastChordNotes.left = { notes: '', time: 0 };
+    this.lastChordNotes.right = { notes: '', time: 0 };
   }
 
   triggerDrum(d: DrumId): void {
     if (!this.drums || !this.started) return;
     // Same lookahead as playChord: scheduling at Tone.now() can land the onset
     // in the past when the main thread is mid-inference, which clicks.
-    const t = Tone.now() + 0.06;
+    const t = Tone.now() + 0.012;
     if (d === 'kick') this.drums.kick.triggerAttackRelease('C1', '8n', t);
     else if (d === 'tom') this.drums.tom.triggerAttackRelease('G2', '8n', t);
     else if (d === 'cowbell') this.drums.cowbell.triggerAttackRelease('G#5', '16n', t);
     else this.drums[d].triggerAttackRelease('16n', t);
-  }
-
-  /**
-   * Disposing a Tone effect disconnects it and routes audio around it, so a
-   * disposed-but-linked node is an inaudible pass-through that costs ~0 CPU.
-   * LFO-driven effects (chorus/tremolo) and multi-stage filters (phaser) burn
-   * real DSP even at wet=0 because the wet path runs before the crossfade.
-   */
-  private powerDownUnused(
-    chain: NonNullable<AudioEngine['chain']>,
-    e: EffectSettings,
-  ): void {
-    if (!e.chorus.enabled) chain.chorus.dispose();
-    if (!e.tremolo.enabled) chain.tremolo.dispose();
-    if (!e.phaser.enabled) chain.phaser.dispose();
-  }
-
-  /** Re-create a disposed chain effect after it has been switched back on. */
-  private ensureEffect(key: 'chorus' | 'tremolo' | 'phaser'): void {
-    const chain = this.chain;
-    if (!chain) return;
-    switch (key) {
-      case 'chorus':
-        if (!chain.chorus.disposed) return;
-        chain.chorus = new Tone.Chorus(4, 2.5, 0.5).start();
-        chain.chorus.connect(chain.phaser);
-        break;
-      case 'tremolo':
-        if (!chain.tremolo.disposed) return;
-        chain.tremolo = new Tone.Tremolo(4, 0.5).start();
-        chain.tremolo.connect(chain.delay);
-        break;
-      case 'phaser':
-        if (!chain.phaser.disposed) return;
-        chain.phaser = new Tone.Phaser({ frequency: 0.5, octaves: 3, baseFrequency: 350 });
-        chain.phaser.connect(chain.tremolo);
-        break;
-    }
   }
 
   applyEffects(e: EffectSettings): void {
@@ -456,14 +402,17 @@ export class AudioEngine {
     if (e.tremolo.frequency !== undefined) {
       this.chain.tremolo.frequency.value = e.tremolo.frequency;
     }
-    // Dispose what's off (saves the audio thread real DSP), re-create what
-    // just came back on.
-    if (!e.chorus.enabled) this.chain.chorus.dispose();
-    else this.ensureEffect('chorus');
-    if (!e.tremolo.enabled) this.chain.tremolo.dispose();
-    else this.ensureEffect('tremolo');
-    if (!e.phaser.enabled) this.chain.phaser.dispose();
-    else this.ensureEffect('phaser');
+    // Stop idle modulators without tearing down the connected signal path.
+    if (e.chorus.enabled !== this.effectsActive.chorus) {
+      if (e.chorus.enabled) this.chain.chorus.start();
+      else this.chain.chorus.stop();
+      this.effectsActive.chorus = e.chorus.enabled;
+    }
+    if (e.tremolo.enabled !== this.effectsActive.tremolo) {
+      if (e.tremolo.enabled) this.chain.tremolo.start();
+      else this.chain.tremolo.stop();
+      this.effectsActive.tremolo = e.tremolo.enabled;
+    }
   }
 
   /** Continuous expression params per hand. */

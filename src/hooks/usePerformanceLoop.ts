@@ -49,6 +49,7 @@ interface HandRuntime {
 
 interface UsePerformanceLoopArgs {
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  handsRef: React.MutableRefObject<TrackedHand[]>;
   enabled: boolean;
   /** Surface modes own note triggering; keep gesture classifier for UI only. */
   surfaceMode?: SurfaceInstrumentMode;
@@ -72,7 +73,7 @@ function buildExpression(
   return p;
 }
 
-export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerformanceLoopArgs) {
+export function usePerformanceLoop({ videoRef, handsRef, enabled, surfaceMode }: UsePerformanceLoopArgs) {
   const trackerRef = useRef<HandTracker | null>(null);
   const engineRef = useRef<AudioEngine | null>(new AudioEngine());
   const runtime = useRef<Record<'left' | 'right', HandRuntime>>({
@@ -106,21 +107,35 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const lastInstrumentRef = useRef({ left: '', right: '' });
+  const startPromiseRef = useRef<Promise<boolean> | null>(null);
 
-  const startAudio = useCallback(async () => {
-    const eng = engineRef.current;
-    if (!eng) return false;
-    await eng.start();
-    eng.setInstrument('left', settingsRef.current.instrumentLeft);
-    eng.setInstrument('right', settingsRef.current.instrumentRight);
-    eng.applyEffects(settingsRef.current.effects);
-    eng.setMasterVolume(settingsRef.current.masterVolume);
-    lastInstrumentRef.current = {
-      left: settingsRef.current.instrumentLeft,
-      right: settingsRef.current.instrumentRight,
-    };
-    usePerf.getState().setAudioReady(true);
-    return true;
+  const startAudio = useCallback((): Promise<boolean> => {
+    if (usePerf.getState().audioReady) return Promise.resolve(true);
+    if (startPromiseRef.current) return startPromiseRef.current;
+    const task = (async () => {
+      const eng = engineRef.current;
+      if (!eng) return false;
+      try {
+        await eng.start();
+        eng.setInstrument('left', settingsRef.current.instrumentLeft);
+        eng.setInstrument('right', settingsRef.current.instrumentRight);
+        eng.applyEffects(settingsRef.current.effects);
+        eng.setMasterVolume(settingsRef.current.masterVolume);
+        lastInstrumentRef.current = {
+          left: settingsRef.current.instrumentLeft,
+          right: settingsRef.current.instrumentRight,
+        };
+        usePerf.getState().setAudioReady(true);
+        usePerf.getState().setAudioError(null);
+        return true;
+      } catch (error) {
+        usePerf.getState().setAudioError(`Could not start sound: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+      }
+    })();
+    startPromiseRef.current = task;
+    void task.finally(() => { startPromiseRef.current = null; });
+    return task;
   }, []);
 
   const initTracker = useCallback(async (): Promise<boolean> => {
@@ -137,10 +152,18 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
     return true;
   }, []);
 
+  useEffect(() => () => {
+    trackerRef.current?.close();
+    trackerRef.current = null;
+    engineRef.current?.dispose();
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     let raf = 0;
     let cancelled = false;
+    let staleCleared = false;
+    let lastFreshFrame = performance.now();
 
     const processJamHand = (
       slot: 'left' | 'right',
@@ -212,7 +235,7 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
       rt.activeChord = label;
     };
 
-    const processHands = (hands: TrackedHand[], now: number, dt: number) => {
+    const processHands = (hands: TrackedHand[], now: number, dt: number, forceLost = false) => {
       const s = settingsRef.current;
       const seen = new Set<'left' | 'right'>();
 
@@ -311,14 +334,17 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
         if (!seen.has(slot)) {
           if (rt.missingSince === null) {
             rt.missingSince = now;
-          } else if (now - rt.missingSince > 250 && engineRef.current) {
-            if (rt.activeChord !== null || rt.state.activeGesture) {
-              engineRef.current.stopHand(slot);
-              rt.activeChord = null;
-            }
+          } else if (rt.missingSince !== -1 && (forceLost || now - rt.missingSince > 250)) {
+            engineRef.current?.stopHand(slot);
+            rt.activeChord = null;
+            rt.jamChord = null;
+            rt.jamVoicing = null;
+            rt.jamFingers.clear();
+            rt.jamNextFire.clear();
+            rt.features = null;
             resetGestureState(rt.state);
-            // immediate UI update: this is a state transition, not per-frame churn
-            usePerf.getState().updateHand({ id: slot, tracked: false, active: null, chordLabel: null });
+            rt.missingSince = -1; // transition handled until the hand returns
+            usePerf.getState().updateHand({ id: slot, tracked: false, gesture: 'none', active: null, chordLabel: null });
           }
         } else {
           rt.missingSince = null;
@@ -352,14 +378,27 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
       // video time freezes but landmarks buffer would keep the last skeleton
       // on screen forever and hold surface notes. Publish empty hands once.
       if (video.readyState < 2) {
-        if (lastVideoTimeRef.current !== -2) {
+        if (!staleCleared && t - lastFreshFrame > 350) {
+          staleCleared = true;
           lastVideoTimeRef.current = -2;
+          handsRef.current = [];
           publishLiveHands([]);
+          processHands([], t, 0.016, true);
         }
         return;
       }
-      if (video.currentTime === lastVideoTimeRef.current) return;
+      if (video.currentTime === lastVideoTimeRef.current) {
+        if (!staleCleared && t - lastFreshFrame > 350) {
+          staleCleared = true;
+          handsRef.current = [];
+          publishLiveHands([]);
+          processHands([], t, 0.016, true);
+        }
+        return;
+      }
       lastVideoTimeRef.current = video.currentTime;
+      lastFreshFrame = t;
+      staleCleared = false;
 
       const now = performance.now();
       const dt = Math.min(Math.max((now - lastFrameTRef.current) / 1000, 0.001), 0.1);
@@ -373,6 +412,7 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
       lastDetectRef.current = now;
 
       const hands = tracker.detect(video, t);
+      handsRef.current = hands;
       publishLiveHands(hands);
       processHands(hands, now, dt);
 
@@ -389,7 +429,20 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
+      handsRef.current = [];
+      publishLiveHands([]);
       engineRef.current?.stopAll();
+      for (const slot of ['left', 'right'] as const) {
+        const rt = runtime.current[slot];
+        rt.activeChord = null;
+        rt.jamChord = null;
+        rt.jamFingers.clear();
+        rt.jamNextFire.clear();
+        rt.features = null;
+        rt.missingSince = null;
+        resetGestureState(rt.state);
+        usePerf.getState().updateHand({ id: slot, tracked: false, gesture: 'none', active: null, chordLabel: null });
+      }
     };
   }, [enabled, surfaceMode, videoRef]);
 
@@ -410,7 +463,7 @@ export function usePerformanceLoop({ videoRef, enabled, surfaceMode }: UsePerfor
       eng.setInstrument('right', settings.instrumentRight);
       lastInstrumentRef.current.right = settings.instrumentRight;
     }
-  }, [settings]);
+  }, [settings.effects, settings.masterVolume, settings.bpm, settings.metronome, settings.instrumentLeft, settings.instrumentRight]);
 
   return { startAudio, initTracker, engineRef };
 }

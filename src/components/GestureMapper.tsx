@@ -165,23 +165,27 @@ export function InstrumentPicker({
   hand,
   value,
   onChange,
+  onPreview,
 }: {
   hand: 'left' | 'right';
   value: string;
   onChange: (id: string) => void;
+  onPreview?: () => void;
 }) {
   return (
-    <label className="flex items-center gap-2 text-xs">
-      <span className="hs-label">{hand}</span>
-      <select
-        className="hs-select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {INSTRUMENTS.map((i) => (
-          <option key={i.id} value={i.id}>{i.name}</option>
-        ))}
-      </select>
-    </label>
+    <div className={`instrument-channel instrument-channel-${hand}`}>
+      <div className="instrument-channel-top">
+        <span className="instrument-side-mark" aria-hidden="true">{hand === 'left' ? 'L' : 'R'}</span>
+        <span className="hs-label">{hand} hand / voice</span>
+        {onPreview && <button type="button" className="instrument-preview" onClick={onPreview} aria-label={`Preview ${hand} hand sound`} title="Play a sample chord">▶ Listen</button>}
+      </div>
+      <label>
+        <span className="sr-only">{hand} hand instrument</span>
+        <select className="hs-select instrument-select" value={value} onChange={(e) => onChange(e.target.value)}>
+          {INSTRUMENTS.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+      </label>
+      <p>{INSTRUMENTS.find((i) => i.id === value)?.voice === 'FMSynth' ? 'FM tone · bright and expressive' : 'Analog tone · warm and immediate'}</p>
+    </div>
   );
 }
