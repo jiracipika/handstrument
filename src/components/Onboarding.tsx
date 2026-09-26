@@ -74,8 +74,8 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
           {step === 0 && (
             <div className="onboarding-step hs-rise">
               <div className="gesture-composition" aria-hidden="true">
-                <div className="gesture-tile gesture-tile-left"><GestureGlyph gesture="openPalm" size={68} accent="#45e7ff" /></div>
-                <div className="gesture-tile gesture-tile-right"><GestureGlyph gesture="peace" size={52} accent="#ff4da6" /></div>
+                <div className="gesture-tile gesture-tile-left"><GestureGlyph gesture="openPalm" size={68} accent="#b9f976" /></div>
+                <div className="gesture-tile gesture-tile-right"><GestureGlyph gesture="peace" size={52} accent="#ae90ff" /></div>
                 <span className="gesture-wire" />
               </div>
               <span className="section-kicker">Play without touching a thing</span>
@@ -114,12 +114,12 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
             <div className="onboarding-step hs-rise">
               <div className="hand-checks" aria-label="Hand tracking status">
                 <div className={leftTracked ? 'is-found' : ''}>
-                  <GestureGlyph gesture="openPalm" size={58} accent="#45e7ff" />
+                  <GestureGlyph gesture="openPalm" size={58} accent="#b9f976" />
                   <span>Left hand</span>
                   <strong>{leftTracked ? 'Found' : 'Waiting'}</strong>
                 </div>
                 <div className={rightTracked ? 'is-found' : ''}>
-                  <GestureGlyph gesture="openPalm" size={58} accent="#ff4da6" />
+                  <GestureGlyph gesture="openPalm" size={58} accent="#ae90ff" />
                   <span>Right hand</span>
                   <strong>{rightTracked ? 'Found' : 'Waiting'}</strong>
                 </div>
@@ -144,7 +144,7 @@ export default function Onboarding({ onDone, onStartAudio, onEnableCamera }: Pro
                   ['fist', 'Fist', 'Stop'],
                 ] as const).map(([gesture, label, action], index) => (
                   <div key={gesture} className={`hs-rise hs-rise-${index + 1}`}>
-                    <GestureGlyph gesture={gesture} size={42} accent={index === 1 ? '#ff4da6' : '#45e7ff'} />
+                    <GestureGlyph gesture={gesture} size={42} accent={index === 1 ? '#ae90ff' : '#b9f976'} />
                     <span>{label}</span><strong>{action}</strong>
                   </div>
                 ))}

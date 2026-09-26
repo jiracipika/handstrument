@@ -39,8 +39,8 @@ export default function PerformanceHUD() {
 
   return (
     <div className="hidden items-center gap-2 md:flex">
-      <HandCard s={left} accent="#22d3ee" />
-      <HandCard s={right} accent="#f472b6" />
+      <HandCard s={left} accent="#b9f976" />
+      <HandCard s={right} accent="#ae90ff" />
       <div className="mono rounded-lg border border-white/10 bg-black/30 px-2 py-1 text-[10px] text-white/50">
         {fps} fps
       </div>

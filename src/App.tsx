@@ -114,8 +114,8 @@ export default function App() {
             <span />
           </div>
           <div>
-            <h1>HandStrument</h1>
-            <p>Gesture instrument lab</p>
+            <h1>handstrument<span className="brand-period">.</span></h1>
+            <p>THE CAMERA IS YOUR INSTRUMENT</p>
           </div>
         </div>
 
@@ -152,12 +152,16 @@ export default function App() {
         <section className="performance-bay" aria-label="Live performance camera">
           <div className="bay-heading">
             <div>
-              <span className="section-kicker">Live input</span>
-              <h2>Performance stage</h2>
+              <span className="section-kicker">01 / THE STAGE</span>
+              <h2>Make music in motion<span className="heading-period">.</span></h2>
+              <p className="bay-subtitle">Bring your hands into frame. Shape the sound as you move.</p>
             </div>
-            <div className="signal-legend" aria-hidden="true">
-              <span><i className="left-signal" /> Left</span>
-              <span><i className="right-signal" /> Right</span>
+            <div className="stage-actions">
+              <div className="signal-legend" aria-hidden="true">
+                <span><i className="left-signal" /> Left</span>
+                <span><i className="right-signal" /> Right</span>
+              </div>
+              {!trackingOn && <button type="button" className="stage-start" onClick={() => void handleStart()}>Start playing <span aria-hidden="true">↗</span></button>}
             </div>
           </div>
 
@@ -173,6 +177,7 @@ export default function App() {
               facing={facing}
               startRequest={cameraStartRequest}
               onSwitchCamera={switchCamera}
+              onStartAudio={startAudio}
               onStream={async () => {
                 if (usePerf.getState().cameraError) usePerf.getState().setCameraError(null);
                 const trackerOk = await initTracker();
@@ -186,6 +191,7 @@ export default function App() {
               handsRef={handsRef}
               mirror={settings.mirror}
             />
+            <div className="camera-topline" aria-hidden="true"><span className={trackingOn ? 'live-dot' : ''} /> {trackingOn ? 'LIVE TRACKING' : 'CAMERA INPUT'} <span>HANDSTRUMENT / 01</span></div>
             {trackingOn && (
               <div className="gesture-monitor" aria-live="polite">
                 {(['left', 'right'] as const).map((hand) => {
@@ -206,13 +212,13 @@ export default function App() {
             <button
               type="button"
               className="scope-copy audio-arm-toggle"
-              onClick={() => void handleStart()}
-              aria-label={audioReady ? 'Audio is on' : 'Turn audio on'}
-              title={audioReady ? 'Audio is on' : 'Browsers need a click before audio can play — click here'}
+              onClick={() => void startAudio()}
+              aria-label={audioReady ? 'Audio is on' : 'Enable audio'}
+              title={audioReady ? 'Audio is on' : 'Enable sound in your browser'}
             >
-              <span>Output monitor</span>
+              <span>AUDIO OUTPUT</span>
               <strong className={audioReady ? 'is-audio-on' : 'is-audio-off'}>
-                {audioReady ? 'Audio on — click to test' : 'Audio muted — click to enable'}
+                {audioReady ? 'Sound ready' : 'Enable sound ↗'}
               </strong>
             </button>
             <AudioVisualizer engineRef={engineRef} className="scope-canvas" />
@@ -221,6 +227,7 @@ export default function App() {
         </section>
 
         <aside className="control-bay" aria-label="Instrument controls">
+          <div className="control-heading"><span className="section-kicker">02 / YOUR SOUND</span><strong>Shape the session</strong><span className="control-heading-rule" /></div>
           <nav className="panel-tabs" aria-label="Control sections">
             {PANELS.map(({ id, label, short }) => (
               <button
@@ -241,12 +248,16 @@ export default function App() {
               <section aria-labelledby="mapper-title" className="panel-section">
                 <div className="panel-title-row">
                   <div>
-                    <span className="section-kicker">Instrument routing</span>
-                    <h2 id="mapper-title">Make each hand your own</h2>
+                    <span className="section-kicker">TWO HANDS / INFINITE COMBINATIONS</span>
+                    <h2 id="mapper-title">Your instrument setup</h2>
                   </div>
                   <button onClick={() => useSettings.getState().resetDefaults()} className="text-action">
                     Reset map
                   </button>
+                </div>
+                <div className="instrument-pair">
+                  <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} />
+                  <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} />
                 </div>
                 <section className="surface-instrument-panel" aria-labelledby="trigger-mode-title">
                   <div>
@@ -254,8 +265,8 @@ export default function App() {
                     <h3 id="trigger-mode-title">How hands make sound</h3>
                     <p>
                       {settings.triggerMode === 'fingers'
-                        ? 'Finger Jam — each finger is its own trigger. Left hand drums (thumb kick, index hat, middle snare, ring clap, pinky tom, hold to repeat). Right hand plays the Bm9-Gmaj7-Em7-F#7 progression one chord per finger; raise, open, spread, and tilt your hand to reshape the chord voicing live.'
-                        : 'Poses — hold a hand shape to fire its mapped chord or drum. Fine-tune each pose below.'}
+                        ? 'Each finger triggers a sound. Your left hand plays drums; your right hand plays chords.'
+                        : 'Hold a hand shape to play its mapped chord, note, or drum. Edit the shapes below.'}
                     </p>
                   </div>
                   <div className="surface-mode-picker" role="group" aria-label="Trigger mode">
@@ -275,9 +286,11 @@ export default function App() {
                     </button>
                   </div>
                 </section>
-                <section className="surface-instrument-panel" aria-labelledby="surface-instrument-title">
+                <details className="surface-instrument-panel surface-details">
+                  <summary>Explore experimental surface instruments <span aria-hidden="true">↗</span></summary>
+                  <section aria-labelledby="surface-instrument-title">
                   <div>
-                    <span className="section-kicker">Camera instrument POC</span>
+                    <span className="section-kicker">EXPERIMENTAL / CAMERA SURFACES</span>
                     <h3 id="surface-instrument-title">Play a surface</h3>
                     <p>Geometric prediction, calibrated for your camera angle. It is not a trained universal piano or trumpet recognizer.</p>
                   </div>
@@ -300,11 +313,8 @@ export default function App() {
                   ) : (
                     <p className="surface-help">Surface instruments are off — your gesture mappings control the sound. Pick Piano or Trumpet above to try the tabletop POC.</p>
                   )}
-                </section>
-                <div className="instrument-pair">
-                  <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} />
-                  <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} />
-                </div>
+                  </section>
+                </details>
                 <GestureMapper refreshKey={teacherRefresh} />
               </section>
             )}

@@ -8,6 +8,7 @@ interface Props {
   mirror: boolean;
   facing: 'user' | 'environment';
   onSwitchCamera?: () => void;
+  onStartAudio?: () => Promise<unknown>;
   /** Incremented by a parent user action to request camera permission. */
   startRequest?: number;
 }
@@ -53,6 +54,7 @@ const CameraView = forwardRef<CameraViewHandle, Props>(function CameraView({
   mirror,
   facing,
   onSwitchCamera,
+  onStartAudio,
   startRequest = 0,
 }: Props, ref) {
   const streamRef = useRef<MediaStream | null>(null);
@@ -183,8 +185,8 @@ const CameraView = forwardRef<CameraViewHandle, Props>(function CameraView({
             </p>
           )}
 
-          <button onClick={() => void start()} className="hs-button" disabled={insecure || requesting}>
-            {insecure ? 'HTTPS required for camera' : requesting ? 'Permission requested…' : 'Enable camera'}
+          <button onClick={() => { void start(); void onStartAudio?.().catch(() => undefined); }} className="hs-button" disabled={insecure || requesting}>
+            {insecure ? 'HTTPS required for camera' : requesting ? 'Permission requested…' : 'Start camera + sound'}
           </button>
 
           {cameraError && <div role="alert" className="camera-error">{cameraError}</div>}

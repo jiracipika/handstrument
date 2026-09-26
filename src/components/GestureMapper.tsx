@@ -31,7 +31,7 @@ export default function GestureMapper({ refreshKey = 0 }: { refreshKey?: number 
 
   const ActionEditor = ({ hand, g }: { hand: 'left' | 'right'; g: GestureId }) => {
     const action = current(hand, g);
-    const accent = hand === 'left' ? '#22d3ee' : '#f472b6';
+    const accent = hand === 'left' ? '#b9f976' : '#ae90ff';
     return (
       <div className="flex min-w-0 flex-col gap-1">
         <select
@@ -117,7 +117,7 @@ export default function GestureMapper({ refreshKey = 0 }: { refreshKey?: number 
         {MAPPABLE_GESTURES.map((g) => (
           <div key={g} className="hs-card flex flex-col gap-2 p-2.5">
             <div className="flex items-center gap-2">
-              <GestureGlyph gesture={g} size={24} accent="#22d3ee" />
+              <GestureGlyph gesture={g} size={24} accent="#b9f976" />
               <span className="text-xs font-medium text-white/80">{GESTURE_LABELS[g] ?? g}</span>
               <span className="hs-label ml-auto">L</span>
               <span className="hs-label">R</span>
@@ -147,7 +147,7 @@ export default function GestureMapper({ refreshKey = 0 }: { refreshKey?: number 
             <tr key={g} className="border-t border-white/5">
               <td className="w-0 min-w-0 px-2 py-2">
                 <div className="flex items-center gap-2">
-                  <GestureGlyph gesture={g} size={24} accent="#22d3ee" />
+                  <GestureGlyph gesture={g} size={24} accent="#b9f976" />
                   <span className="truncate font-medium text-white/80">{label}</span>
                 </div>
               </td>
