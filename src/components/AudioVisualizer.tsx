@@ -10,10 +10,13 @@ interface Props {
 export default function AudioVisualizer({ engineRef, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
+  const lastDrawRef = useRef(0);
 
   useEffect(() => {
-    const draw = () => {
+    const draw = (now: number) => {
       rafRef.current = requestAnimationFrame(draw);
+      if (document.hidden || now - lastDrawRef.current < 33) return;
+      lastDrawRef.current = now;
       const canvas = canvasRef.current;
       const eng = engineRef.current;
       if (!canvas) return;
@@ -30,6 +33,10 @@ export default function AudioVisualizer({ engineRef, className }: Props) {
       const spec = eng?.getSpectrum();
       const bins = 48;
       const bw = w / bins;
+      const grad = ctx.createLinearGradient(0, h, 0, 0);
+      grad.addColorStop(0, 'rgba(185,249,118,0.9)');
+      grad.addColorStop(1, 'rgba(174,144,255,0.9)');
+      ctx.fillStyle = grad;
       for (let i = 0; i < bins; i++) {
         let v = 0;
         if (spec && !Array.isArray(spec) && spec.length > 0) {
@@ -40,10 +47,6 @@ export default function AudioVisualizer({ engineRef, className }: Props) {
         }
         // Keep the monitor quiet until the analyser reports actual audio.
         const bh = v * (h - 6);
-        const grad = ctx.createLinearGradient(0, h, 0, h - bh);
-        grad.addColorStop(0, 'rgba(185,249,118,0.9)');
-        grad.addColorStop(1, 'rgba(174,144,255,0.9)');
-        ctx.fillStyle = grad;
         ctx.fillRect(i * bw + 1, h - bh, bw - 2, bh);
       }
     };

@@ -53,12 +53,14 @@ export function useSurfaceInstrument({
   }, []);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || mode === 'none') {
       lastNoteRef.current = null;
       trumpetNoteRef.current = null;
       pressTrackerRef.current = null;
       fingertipFilterRef.current = null;
-      setPrediction({ label: 'Camera is off', detail: 'Enable camera to start', active: false });
+      setPrediction(mode === 'none' && enabled
+        ? { label: 'Surface off', detail: 'Your gesture mappings control the sound', active: false }
+        : { label: 'Camera is off', detail: 'Enable camera to start', active: false });
       return;
     }
     const timer = window.setInterval(() => {
@@ -68,7 +70,9 @@ export function useSurfaceInstrument({
         trumpetNoteRef.current = null;
         pressTrackerRef.current = null;
         fingertipFilterRef.current = null;
-        setPrediction({ label: 'Waiting for a hand', detail: 'Keep your hand in frame', active: false });
+        setPrediction((prev) => prev.label === 'Waiting for a hand'
+          ? prev
+          : { label: 'Waiting for a hand', detail: 'Keep your hand in frame', active: false });
         return;
       }
       const features = extractFeatures(hand.landmarks);
@@ -84,11 +88,7 @@ export function useSurfaceInstrument({
       let detail: string;
       let active = true;
 
-      if (mode === 'none') {
-        lastNoteRef.current = null;
-        setPrediction({ label: 'Surface off', detail: 'Your gesture mappings control the sound', active: false });
-        return;
-      } else if (mode === 'piano') {
+      if (mode === 'piano') {
         const reversed = useSettings.getState().settings.mirror !== false;
         if (pressTrackerSurfaceRef.current !== surface) {
           pressTrackerRef.current = createKeyPressTracker(surface, reversed);
@@ -130,7 +130,8 @@ export function useSurfaceInstrument({
         label = note;
         detail = `Valves ${valves.map((pressed, index) => (pressed ? index + 1 : '—')).join(' ')}`;
       }
-      setPrediction({ label, detail, active });
+      setPrediction((prev) => prev.label === label && prev.detail === detail && prev.active === active
+        ? prev : { label, detail, active });
     }, 66);
     return () => window.clearInterval(timer);
   }, [enabled, engineRef, mode, surface]);

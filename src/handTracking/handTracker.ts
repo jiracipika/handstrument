@@ -21,14 +21,17 @@ export interface TrackerInitResult {
 
 export class HandTracker {
   private landmarker: HandLandmarker | null = null;
+  private recovering: Promise<TrackerInitResult> | null = null;
+  private closed = false;
 
   async init(): Promise<TrackerInitResult> {
+    this.closed = false;
     if (this.gpuBlacklisted) {
       return this.reinit('CPU');
     }
     try {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-      this.landmarker = await HandLandmarker.createFromOptions(fileset, {
+      const next = await HandLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
         runningMode: 'VIDEO',
         numHands: 2,
@@ -36,6 +39,9 @@ export class HandTracker {
         minHandPresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
+      if (this.closed) { next.close(); return { ok: false, error: 'Tracking was stopped' }; }
+      this.landmarker?.close();
+      this.landmarker = next;
       return { ok: true };
     } catch (e) {
       // GPU delegate can fail on some machines (older Intel GPUs, blocked
@@ -51,22 +57,29 @@ export class HandTracker {
   private lastRebuildAt = 0;
 
   /** Rebuild the landmarker on the given delegate (recovery path). */
-  private async reinit(delegate: 'GPU' | 'CPU'): Promise<TrackerInitResult> {
-    try {
+  private reinit(delegate: 'GPU' | 'CPU'): Promise<TrackerInitResult> {
+    if (this.recovering) return this.recovering;
+    const task = (async (): Promise<TrackerInitResult> => { try {
       const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-      this.landmarker = await HandLandmarker.createFromOptions(fileset, {
+      const next = await HandLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate },
         runningMode: 'VIDEO',
         numHands: 2,
       });
+      if (this.closed) { next.close(); return { ok: false, error: 'Tracking was stopped' }; }
+      this.landmarker?.close();
+      this.landmarker = next;
       return { ok: true };
     } catch (e2) {
       return { ok: false, error: String(e2) };
-    }
+    } })();
+    this.recovering = task;
+    void task.finally(() => { if (this.recovering === task) this.recovering = null; });
+    return task;
   }
 
   detect(video: HTMLVideoElement, timestampMs: number): TrackedHand[] {
-    if (!this.landmarker || video.readyState < 2) return [];
+    if (!this.landmarker || this.recovering || video.readyState < 2) return [];
     let result: HandLandmarkerResult;
     try {
       result = this.landmarker.detectForVideo(video, timestampMs);
@@ -111,6 +124,7 @@ export class HandTracker {
   }
 
   close(): void {
+    this.closed = true;
     this.landmarker?.close();
     this.landmarker = null;
   }

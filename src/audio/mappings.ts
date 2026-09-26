@@ -79,6 +79,7 @@ export function describeAction(a: ChordAction | undefined): string {
 export interface SoundPreset {
   id: string;
   name: string;
+  description?: string;
   instrumentLeft: string;
   instrumentRight: string;
   effects?: Partial<{
@@ -96,6 +97,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'jam',
     name: 'Instant Jam',
+    description: 'Bright chords, ready to play',
     instrumentLeft: 'piano',
     instrumentRight: 'synth',
     effects: { reverb: { enabled: true, wet: 0.25 } },
@@ -103,6 +105,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'ambient',
     name: 'Ambient',
+    description: 'Floating pads and glassy echoes',
     instrumentLeft: 'softpad',
     instrumentRight: 'glass',
     effects: {
@@ -115,6 +118,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'cathedral',
     name: 'Cathedral',
+    description: 'A huge, resonant space',
     instrumentLeft: 'choir',
     instrumentRight: 'vibes',
     effects: { reverb: { enabled: true, wet: 0.8 } },
@@ -123,6 +127,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'lofi',
     name: 'Lo-fi',
+    description: 'Soft keys with warm color',
     instrumentLeft: 'epiano',
     instrumentRight: 'marimba',
     effects: {
@@ -136,6 +141,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'retrowave',
     name: 'Retrowave',
+    description: 'Wide analog motion',
     instrumentLeft: 'strings',
     instrumentRight: 'hardsync',
     effects: {
@@ -149,6 +155,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'pluck',
     name: 'Plucked',
+    description: 'Delicate acoustic textures',
     instrumentLeft: 'harp',
     instrumentRight: 'kalimba',
     effects: { reverb: { enabled: true, wet: 0.3 }, delay: { enabled: true, wet: 0.2 } },
@@ -157,6 +164,7 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'organ',
     name: 'Organ Duo',
+    description: 'Full harmonics and sustain',
     instrumentLeft: 'organ',
     instrumentRight: 'organfull',
     effects: { reverb: { enabled: true, wet: 0.2 }, tremolo: { enabled: true, wet: 0.2 } },
@@ -165,9 +173,22 @@ export const SOUND_PRESETS: SoundPreset[] = [
   {
     id: 'sub',
     name: 'Sub & Lead',
+    description: 'Deep lows and cutting highs',
     instrumentLeft: 'subbass',
     instrumentRight: 'lead',
     effects: { reverb: { enabled: true, wet: 0.15 }, distortion: { enabled: true, wet: 0.1 } },
     masterVolume: -8,
   },
+  { id: 'cosmic', name: 'Cosmic Bloom', description: 'Shimmering keys and long tails',
+    instrumentLeft: 'dream', instrumentRight: 'celesta',
+    effects: { reverb: { enabled: true, wet: 0.5 }, delay: { enabled: true, wet: 0.24 } }, masterVolume: -10 },
+  { id: 'arcade', name: 'Arcade Pulse', description: 'Playful pixel notes and mallets',
+    instrumentLeft: 'chiptune', instrumentRight: 'mallet',
+    effects: { reverb: { enabled: true, wet: 0.12 } }, masterVolume: -11 },
+  { id: 'jazz', name: 'After Hours', description: 'Warm brass over velvet keys',
+    instrumentLeft: 'epiano', instrumentRight: 'brass',
+    effects: { reverb: { enabled: true, wet: 0.2 } }, masterVolume: -10 },
+  { id: 'air', name: 'Open Air', description: 'Breathy melody over dream keys',
+    instrumentLeft: 'dream', instrumentRight: 'flute',
+    effects: { reverb: { enabled: true, wet: 0.32 }, delay: { enabled: true, wet: 0.15 } }, masterVolume: -9 },
 ];

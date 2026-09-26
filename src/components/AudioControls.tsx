@@ -1,6 +1,7 @@
 import { useSettings } from '../stores/settingsStore';
 import { usePerf } from '../stores/performanceStore';
 import { SOUND_PRESETS } from '../audio/mappings';
+import { DEFAULT_EFFECTS } from '../types';
 import type { AudioEngine } from '../audio/audioEngine';
 
 function Slider({
@@ -61,11 +62,11 @@ export default function AudioControls({ engineRef }: { engineRef?: React.Mutable
     if (!p) return;
     set('instrumentLeft', p.instrumentLeft);
     set('instrumentRight', p.instrumentRight);
-    if (p.effects) {
-      for (const [k, v] of Object.entries(p.effects)) {
-        setEffect(k as never, v as never);
-      }
+    const effects = structuredClone(DEFAULT_EFFECTS);
+    for (const [k, v] of Object.entries(p.effects ?? {})) {
+      Object.assign(effects[k as keyof typeof effects], v);
     }
+    set('effects', effects);
     if (p.masterVolume !== undefined) set('masterVolume', p.masterVolume);
   };
 
@@ -77,21 +78,16 @@ export default function AudioControls({ engineRef }: { engineRef?: React.Mutable
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="hs-label mb-1.5">Sound presets</div>
-        <div className="flex flex-wrap gap-2">
+        <div className="hs-label mb-1.5">Sound scenes / instant combinations</div>
+        <div className="sound-preset-grid">
           {SOUND_PRESETS.map((p) => (
-            <button key={p.id} className="hs-chip" onClick={() => applyPreset(p.id)}>
-              {p.name}
+            <button key={p.id} className="sound-preset" data-active={s.instrumentLeft === p.instrumentLeft && s.instrumentRight === p.instrumentRight} onClick={() => applyPreset(p.id)}>
+              <span className="sound-preset-icon" aria-hidden="true">◈</span>
+              <span><strong>{p.name}</strong><small>{p.description}</small></span>
             </button>
           ))}
-          <button
-            className="hs-chip"
-            style={{ ['--chip-accent' as string]: '#f87171' }}
-            onClick={panicStop}
-          >
-            ■ Silence
-          </button>
         </div>
+        <button className="silence-control" onClick={panicStop}>■ Silence all notes</button>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

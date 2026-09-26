@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useSettings } from './stores/settingsStore';
 import { usePerf } from './stores/performanceStore';
 import { usePerformanceLoop } from './hooks/usePerformanceLoop';
 import { useSurfaceInstrument } from './hooks/useSurfaceInstrument';
 import type { SurfaceInstrumentMode } from './instruments/surfacePrediction';
-import { getLiveHands } from './handTracking/liveHands';
 import CameraView, { type CameraViewHandle } from './components/CameraView';
 import HandOverlay from './components/HandOverlay';
 import PerformanceHUD from './components/PerformanceHUD';
@@ -47,8 +46,10 @@ export default function App() {
   const perfRight = usePerf((s) => s.right);
   const cameraError = usePerf((s) => s.cameraError);
   const audioReady = usePerf((s) => s.audioReady);
+  const audioError = usePerf((s) => s.audioError);
   const { startAudio, initTracker, engineRef } = usePerformanceLoop({
     videoRef,
+    handsRef,
     enabled: trackingOn,
     surfaceMode,
   });
@@ -69,22 +70,19 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!trackingOn) {
-      handsRef.current = [];
-      return;
-    }
-    const id = setInterval(() => {
-      handsRef.current = getLiveHands();
-    }, 40);
-    return () => clearInterval(id);
-  }, [trackingOn]);
-
   const handleStart = async () => {
     // Request camera before awaiting audio initialization. Keeping camera access
     // adjacent to the click is the most compatible path across browser engines.
     const cameraRequest = enableCamera();
     await Promise.all([cameraRequest, startAudio()]);
+  };
+
+  const previewSound = async (hand: 'left' | 'right') => {
+    if (!usePerf.getState().audioReady && !(await startAudio())) return;
+    engineRef.current?.playChord(hand, hand === 'left' ? ['C4', 'E4', 'G4'] : ['G4', 'B4', 'D5'], {
+      sustain: false,
+      velocity: 0.55,
+    });
   };
 
   const switchCamera = () => {
@@ -218,12 +216,13 @@ export default function App() {
             >
               <span>AUDIO OUTPUT</span>
               <strong className={audioReady ? 'is-audio-on' : 'is-audio-off'}>
-                {audioReady ? 'Sound ready' : 'Enable sound ↗'}
+                {audioReady ? 'Sound ready' : audioError ? 'Retry sound ↗' : 'Enable sound ↗'}
               </strong>
             </button>
             <AudioVisualizer engineRef={engineRef} className="scope-canvas" />
             <PerformanceHUD />
           </div>
+          {audioError && <p role="alert" className="audio-error">{audioError}</p>}
         </section>
 
         <aside className="control-bay" aria-label="Instrument controls">
@@ -256,8 +255,8 @@ export default function App() {
                   </button>
                 </div>
                 <div className="instrument-pair">
-                  <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} />
-                  <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} />
+                  <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} onPreview={() => void previewSound('left')} />
+                  <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} onPreview={() => void previewSound('right')} />
                 </div>
                 <section className="surface-instrument-panel" aria-labelledby="trigger-mode-title">
                   <div>

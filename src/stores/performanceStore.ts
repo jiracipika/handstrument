@@ -16,12 +16,14 @@ interface PerfState {
   right: HandPerfStatus;
   trackingFps: number;
   audioReady: boolean;
+  audioError: string | null;
   cameraError: string | null;
   octaveLeft: number;
   octaveRight: number;
   updateHand(status: Partial<HandPerfStatus> & { id: 'left' | 'right' }): void;
   setFps(fps: number): void;
   setAudioReady(v: boolean): void;
+  setAudioError(e: string | null): void;
   setCameraError(e: string | null): void;
   octaveShift(hand: 'left' | 'right', delta: number, base: number): void;
 }
@@ -40,6 +42,7 @@ export const usePerf = create<PerfState>((set) => ({
   right: emptyStatus('right'),
   trackingFps: 0,
   audioReady: false,
+  audioError: null,
   cameraError: null,
   octaveLeft: 0,
   octaveRight: 0,
@@ -47,6 +50,7 @@ export const usePerf = create<PerfState>((set) => ({
     set((st) => ({ [status.id]: { ...st[status.id], ...status } }) as Partial<PerfState>),
   setFps: (fps) => set({ trackingFps: fps }),
   setAudioReady: (v) => set({ audioReady: v }),
+  setAudioError: (e) => set({ audioError: e }),
   setCameraError: (e) => set({ cameraError: e }),
   octaveShift: (hand, delta) =>
     set((st) => {
