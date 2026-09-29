@@ -152,7 +152,7 @@ export default function App() {
             <div>
               <span className="section-kicker">01 / THE STAGE</span>
               <h2>Make music in motion<span className="heading-period">.</span></h2>
-              <p className="bay-subtitle">Bring your hands into frame. Shape the sound as you move.</p>
+            <p className="bay-subtitle">Bring your hands into frame. Shape the sound as you move.</p>
             </div>
             <div className="stage-actions">
               <div className="signal-legend" aria-hidden="true">
@@ -189,7 +189,11 @@ export default function App() {
               handsRef={handsRef}
               mirror={settings.mirror}
             />
-            <div className="camera-topline" aria-hidden="true"><span className={trackingOn ? 'live-dot' : ''} /> {trackingOn ? 'LIVE TRACKING' : 'CAMERA INPUT'} <span>HANDSTRUMENT / 01</span></div>
+            <div className="camera-topline" aria-live="polite">
+              <span className={trackingOn ? 'live-dot' : ''} />
+              <strong>{trackingOn ? 'TRACKING LIVE' : cameraError ? 'INPUT NEEDS ATTENTION' : 'STAGE READY'}</strong>
+              <span>{trackingOn ? 'TWO HAND CHANNELS' : 'CAMERA + GESTURE INPUT'}</span>
+            </div>
             {trackingOn && (
               <div className="gesture-monitor" aria-live="polite">
                 {(['left', 'right'] as const).map((hand) => {
@@ -206,7 +210,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="scope-rack">
+          <div className={`scope-rack ${audioReady ? 'is-audio-ready' : ''}`}>
             <button
               type="button"
               className="scope-copy audio-arm-toggle"
@@ -226,7 +230,12 @@ export default function App() {
         </section>
 
         <aside className="control-bay" aria-label="Instrument controls">
-          <div className="control-heading"><span className="section-kicker">02 / YOUR SOUND</span><strong>Shape the session</strong><span className="control-heading-rule" /></div>
+          <div className="control-heading">
+            <span className="section-kicker">02 / YOUR SOUND</span>
+            <strong>Shape the session</strong>
+            <span className="control-heading-rule" />
+            <span className="control-heading-led" aria-hidden="true" />
+          </div>
           <nav className="panel-tabs" aria-label="Control sections">
             {PANELS.map(({ id, label, short }) => (
               <button
@@ -258,30 +267,34 @@ export default function App() {
                   <InstrumentPicker hand="left" value={settings.instrumentLeft} onChange={(id) => set('instrumentLeft', id)} onPreview={() => void previewSound('left')} />
                   <InstrumentPicker hand="right" value={settings.instrumentRight} onChange={(id) => set('instrumentRight', id)} onPreview={() => void previewSound('right')} />
                 </div>
-                <section className="surface-instrument-panel" aria-labelledby="trigger-mode-title">
+                <section className="surface-instrument-panel trigger-mode-panel" aria-labelledby="trigger-mode-title">
                   <div>
-                    <span className="section-kicker">Trigger mode</span>
-                    <h3 id="trigger-mode-title">How hands make sound</h3>
+                    <span className="section-kicker">PLAY STYLE / SELECT ONE</span>
+                    <h3 id="trigger-mode-title">How do you want to play?</h3>
                     <p>
                       {settings.triggerMode === 'fingers'
-                        ? 'Each finger triggers a sound. Your left hand plays drums; your right hand plays chords.'
-                        : 'Hold a hand shape to play its mapped chord, note, or drum. Edit the shapes below.'}
+                        ? 'Individual fingers become drum hits and chord triggers.'
+                        : 'Hold a hand pose to play its mapped chord, note, or drum.'}
                     </p>
                   </div>
-                  <div className="surface-mode-picker" role="group" aria-label="Trigger mode">
+                  <div className="trigger-mode-options" role="group" aria-label="Play style">
                     <button
-                      className={settings.triggerMode === 'poses' ? 'is-selected' : ''}
+                      className={`trigger-mode-option ${settings.triggerMode === 'poses' ? 'is-selected' : ''}`}
                       onClick={() => set('triggerMode', 'poses')}
                       aria-pressed={settings.triggerMode === 'poses'}
                     >
-                      Poses
+                      <span className="trigger-mode-index">01</span>
+                      <span><strong>Gesture map</strong><small>Play with hand shapes</small></span>
+                      <span className="trigger-mode-check" aria-hidden="true">✓</span>
                     </button>
                     <button
-                      className={settings.triggerMode === 'fingers' ? 'is-selected' : ''}
+                      className={`trigger-mode-option ${settings.triggerMode === 'fingers' ? 'is-selected' : ''}`}
                       onClick={() => set('triggerMode', 'fingers')}
                       aria-pressed={settings.triggerMode === 'fingers'}
                     >
-                      Finger Jam (legacy)
+                      <span className="trigger-mode-index">02</span>
+                      <span><strong>Finger Jam</strong><small>Play each finger</small></span>
+                      <span className="trigger-mode-check" aria-hidden="true">✓</span>
                     </button>
                   </div>
                 </section>
