@@ -61,17 +61,26 @@ Camera access requires HTTPS (or localhost), which Vercel provides automatically
 | Three Fingers | A Minor | F Major |
 | Four Fingers | — | G7 |
 | Rock / Horns | — | E Minor |
-| Thumb Up | Octave + | Octave + |
-| Thumb Down | Octave − | Octave − |
-| Pinch | Kick | Kick |
+| Thumb Up | — | Octave + |
+| Thumb Down | — | Octave − |
+| Pinch | — | Kick |
 | OK | — | Snare |
 | Fist | Stop | Stop |
+| Swipe ← / → | Octave − / + | Octave − / + |
+| Swipe ↑ / ↓ | Clap / Hat | Clap / Hat |
 
 Both hands are fully independent and polyphonic — two chords sound simultaneously.
 Hold a gesture ~180 ms (configurable) to activate it; the state machine prevents
-retriggering while sustained. Pinch distance sweeps a per-hand filter, horizontal
-position pans stereo, and apparent hand size (distance from camera) scales volume —
-all remappable in the Sound panel.
+retriggering while sustained. Motion gestures (wired 2026-10-05: swipes step
+octaves and fire drum accents; moveCloser/moveAway/rotateCW/rotateCCW are
+detected and reported with no default action) run in both trigger modes. Pinch
+distance sweeps a per-hand filter, horizontal position pans stereo, and apparent
+hand size (distance from camera) scales volume — all remappable in the Sound panel.
+
+Thumb up/down orientation is dataset-grounded (2026-10-05): the primary signal
+is thumb-tip height vs the wrist, validated on real HaGRID thumbs-up/down
+samples where the tip sits 1.07–2.25 hand-units above the wrist on every
+thumbs-up; the palm-roll angle remains as a fallback for tilted hands.
 
 ## Architecture
 

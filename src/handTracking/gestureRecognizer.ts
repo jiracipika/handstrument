@@ -95,6 +95,7 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
     spread: spreadSum / pairs / s,
     rollAngle,
     handSize: s,
+    thumbDy: (landmarks[THUMB_TIP].y - landmarks[WRIST].y) / s,
     palmCenter,
     velocity: { x: 0, y: 0 },
     rollVelocity: 0,
@@ -149,13 +150,17 @@ export function classifyGesture(f: HandFeatures): GestureMatch {
   // Rock/horns: thumb+pinky only.
   if (t && p && !i && !m && !r) return { gesture: 'rock', confidence: 0.9 };
 
-  // Thumb alone: orientation picks thumbs-up vs thumbs-down. The palm-roll
-  // proxy: an inverted hand carries a flipped roll axis. If roll info is
-  // inconclusive, default to thumbUp (classic "liked" pose).
+  // Thumb alone: orientation picks thumbs-up vs thumbs-down. Primary signal
+  // is thumb-tip height vs the wrist (DATASET-GROUNDED 2026-10-05: on real
+  // HaGRID thumbs-up samples the tip sits 1.07-2.25 hand-units ABOVE the wrist
+  // 100% of the time; thumbs-down sits ~1.2 below). The palm-roll proxy stays
+  // as the fallback for hands tilted past the vertical regime; ties default
+  // to thumbUp (classic "liked" pose).
   if (t && !i && !m && !r && !p) {
-    return Math.abs(f.rollAngle) > 2.2
-      ? { gesture: 'thumbDown', confidence: 0.8 }
-      : { gesture: 'thumbUp', confidence: 0.85 };
+    const thumbDown = f.thumbDy > -0.6 || Math.abs(f.rollAngle) > 2.2;
+    return thumbDown
+      ? { gesture: 'thumbDown', confidence: 0.85 }
+      : { gesture: 'thumbUp', confidence: 0.9 };
   }
 
   // --- generic count-based poses ----------------------------------------

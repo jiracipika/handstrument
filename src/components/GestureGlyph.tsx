@@ -9,7 +9,6 @@ import type { GestureId } from '../types';
 // Thumb, index, middle, ring, pinky extended?
 const F: Record<string, [boolean, boolean, boolean, boolean, boolean]> = {
   openPalm: [true, true, true, true, true],
-  flat: [true, true, true, true, true],
   fist: [false, false, false, false, false],
   point: [false, true, false, false, false],
   peace: [false, true, true, false, false],

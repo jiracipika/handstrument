@@ -1,8 +1,7 @@
-import type { ChordSpec, ChordAction, GestureId, HandMapping, NoteName } from '../types';
+import type { ChordSpec, ChordAction, GestureId, HandMapping, MotionGestureId, NoteName } from '../types';
 
 export const GESTURE_LABELS: Record<string, string> = {
   openPalm: 'Open Palm',
-  flat: 'Flat Hand',
   fist: 'Fist',
   point: 'Point',
   peace: 'Peace',
@@ -25,7 +24,7 @@ export const NOTE_NAMES_ALL: NoteName[] = [
 ];
 
 export const MAPPABLE_GESTURES: GestureId[] = [
-  'openPalm', 'point', 'peace', 'three', 'four', 'thumbUp', 'thumbDown', 'pinch', 'ok', 'rock', 'fist', 'flat',
+  'openPalm', 'point', 'peace', 'three', 'four', 'thumbUp', 'thumbDown', 'pinch', 'ok', 'rock', 'fist',
 ];
 
 /** Instant Jam preset: gesture -> action for both hands. */
@@ -192,3 +191,20 @@ export const SOUND_PRESETS: SoundPreset[] = [
     instrumentLeft: 'dream', instrumentRight: 'flute',
     effects: { reverb: { enabled: true, wet: 0.32 }, delay: { enabled: true, wet: 0.15 } }, masterVolume: -9 },
 ];
+
+/**
+ * Motion gestures (wired 2026-10-05): fixed musical actions, both hands.
+ * Swipes step octaves; swipes up/down fire drum accents. Size/roll motions
+ * (moveCloser/moveAway/rotateCW/rotateCCW) are detected and reported to the
+ * UI but default to no action — reserved for mapping.
+ */
+export const MOTION_ACTIONS: Record<MotionGestureId, ChordAction> = {
+  swipeRight: { kind: 'octaveUp' },
+  swipeLeft: { kind: 'octaveDown' },
+  swipeUp: { kind: 'drum', drum: 'clap' },
+  swipeDown: { kind: 'drum', drum: 'hat' },
+  moveCloser: { kind: 'none' },
+  moveAway: { kind: 'none' },
+  rotateCW: { kind: 'none' },
+  rotateCCW: { kind: 'none' },
+};

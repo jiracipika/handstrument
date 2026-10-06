@@ -54,6 +54,20 @@ describe('gesture classification from synthetic landmarks', () => {
   it('four (four fingers, no thumb)', () => {
     expect(G(0, 1, 1, 1, 1)).toBe('four');
   });
+
+  // thumbUp vs thumbDown (2026-10-05, dataset-grounded): the primary signal
+  // is thumb-tip height vs wrist (HaGRID: likes sit 1.07-2.25 units ABOVE the
+  // wrist 100% of the time); the palm-roll proxy is only a fallback.
+  it('thumb with tip above the wrist is thumbUp even when the hand is rolled', () => {
+    const f = extractFeatures(makeLandmarks([1, 0, 0, 0, 0]));
+    (f as unknown as { thumbDy: number }).thumbDy = -1.5; // well above wrist
+    expect(classifyGesture({ ...f, thumbDy: -1.5 }).gesture).toBe('thumbUp');
+  });
+  it('thumb at or below wrist level reads thumbDown', () => {
+    const f = extractFeatures(makeLandmarks([1, 0, 0, 0, 0]));
+    expect(classifyGesture({ ...f, thumbDy: -0.2 }).gesture).toBe('thumbDown');
+    expect(classifyGesture({ ...f, thumbDy: 0.8 }).gesture).toBe('thumbDown');
+  });
 });
 
 describe('feature extraction', () => {
@@ -162,16 +176,16 @@ describe('motion detection', () => {
 
   it('detects a right swipe', () => {
     const st = newGestureState();
-    st.motionHistory.push({ x: 0.3, y: 0.5, t: t0 });
-    st.motionHistory.push({ x: 0.5, y: 0.5, t: t0 + 150 });
+    st.motionHistory.push({ x: 0.3, y: 0.5, t: t0, size: 0.1 });
+    st.motionHistory.push({ x: 0.5, y: 0.5, t: t0 + 150, size: 0.1 });
     // current frame is passed as features (detectMotion appends it)
     expect(detectMotion(st, mkFeatures(0.7), t0 + 300, cfg)).toBe('swipeRight');
   });
   it('ignores slow drift', () => {
     const st = newGestureState();
     const strict = { ...cfg, motionVelocityThreshold: 5 };
-    st.motionHistory.push({ x: 0.30, y: 0.5, t: t0 });
-    st.motionHistory.push({ x: 0.31, y: 0.5, t: t0 + 150 });
+    st.motionHistory.push({ x: 0.30, y: 0.5, t: t0, size: 0.1 });
+    st.motionHistory.push({ x: 0.31, y: 0.5, t: t0 + 150, size: 0.1 });
     expect(detectMotion(st, mkFeatures(0.32), t0 + 300, strict)).toBeNull();
   });
 });

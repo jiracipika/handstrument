@@ -9,7 +9,6 @@ export interface Vec2 {
 
 export type GestureId =
   | 'openPalm'
-  | 'flat'
   | 'fist'
   | 'point'
   | 'peace'
@@ -31,8 +30,7 @@ export type MotionGestureId =
   | 'moveCloser'
   | 'moveAway'
   | 'rotateCW'
-  | 'rotateCCW'
-  | 'circle';
+  | 'rotateCCW';
 
 export interface GestureMatch {
   gesture: GestureId;
@@ -59,6 +57,9 @@ export interface HandFeatures {
   velocity: Vec2;
   /** angular velocity of roll angle, rad/sec (smoothed) */
   rollVelocity: number;
+  /** thumb tip height vs wrist, in hand-size units (y grows down). HaGRID
+   * thumbs-up sits ~1.5 ABOVE the wrist, thumbs-down ~1.2 below. */
+  thumbDy: number;
 }
 
 export interface TrackedHand {

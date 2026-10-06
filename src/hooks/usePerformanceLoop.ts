@@ -10,11 +10,13 @@ import {
   newGestureState,
   updateGestureState,
   resetGestureState,
+  detectMotion,
   type HandGestureState,
 } from '../handTracking/gestureSmoothing';
 import { AudioEngine } from '../audio/audioEngine';
 import { chordNoteNames, chordLabel } from '../audio/chords';
 import { classifyCustom } from '../handTracking/customGestures';
+import { MOTION_ACTIONS } from '../audio/mappings';
 import {
   detectFingers,
   palmHeight,
@@ -249,6 +251,24 @@ export function usePerformanceLoop({ videoRef, handsRef, enabled, surfaceMode }:
 
         const eng = engineRef.current;
         const perf = usePerf.getState();
+
+        // Motion gestures (WIRED 2026-10-05 — detectMotion existed and was
+        // tested but was never called from any loop): swipes step octaves,
+        // swipes up/down fire drum accents, in both trigger modes. Rotation
+        // and size-trend motions are detected and reported but default to no
+        // action (see MOTION_ACTIONS).
+        const motion = detectMotion(rt.state, rt.features, now, {
+          stabilityMs: s.stabilityMs,
+          cooldownMs: 350,
+          confidenceThreshold: 0.75,
+          motionVelocityThreshold: 1.2 / Math.max(s.sensitivity, 0.1),
+        });
+        if (motion && eng && usePerf.getState().audioReady && !surfaceMode) {
+          const action = MOTION_ACTIONS[motion];
+          if (action.kind === 'octaveUp') perf.octaveShift(slot, 1, s.baseOctave);
+          else if (action.kind === 'octaveDown') perf.octaveShift(slot, -1, s.baseOctave);
+          else if (action.kind === 'drum') eng.triggerDrum(action.drum);
+        }
 
         // Finger Jam mode: per-finger triggers replace the pose classifier
         // entirely (expression below still runs).
