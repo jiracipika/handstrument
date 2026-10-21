@@ -17,10 +17,17 @@ function makeLandmarks(fingers: number[], spread = 1) {
   lms.push(wrist);
   // thumb: f0=1 -> extended out to the side; f0=0 -> tucked against palm
   const f0 = fingers[0];
+  // f0=1 -> extended out to the side; f0=0 -> folded OVER the palm (real "four"
+  // hands measure 0.19-0.66 palm-widths thumb-tip->palm-center, median 0.41)
   lms.push({ x: 0.42, y: 0.72 });
   lms.push({ x: 0.40, y: 0.68 });
-  lms.push({ x: 0.36, y: 0.60 - 0.03 * f0 });
-  lms.push({ x: 0.38 - 0.08 * f0, y: 0.63 - 0.15 * f0 });
+  if (f0) {
+    lms.push({ x: 0.36, y: 0.57 });
+    lms.push({ x: 0.30, y: 0.48 });
+  } else {
+    lms.push({ x: 0.42, y: 0.585 });
+    lms.push({ x: 0.455, y: 0.575 });
+  }
   const mcpX = [0.44, 0.50, 0.55, 0.60];
   for (let f = 1; f < 5; f++) {
     const ext = fingers[f];

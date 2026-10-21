@@ -60,6 +60,15 @@ export interface HandFeatures {
   /** thumb tip height vs wrist, in hand-size units (y grows down). HaGRID
    * thumbs-up sits ~1.5 ABOVE the wrist, thumbs-down ~1.2 below. */
   thumbDy: number;
+  /** thumb reach: |thumbTip - indexMCP| / |indexMCP - pinkyMCP| (palm widths).
+   * Dataset-grounded 2026-10-21: fist p90 0.66, thumb gestures (like/dislike)
+   * p10 0.83 — hysteresis up at 0.78, down at 0.62. Splits curled-thumb poses
+   * (fist 0.38, one 0.36, peace 0.60) from extended (ok 1.08, palm 1.14). */
+  thumbOut: number;
+  /** thumb-tip to palm-center (middle MCP) in palm widths — splits all-four-up
+   * poses: "four" folds the thumb over the palm (p90 0.66), open palms keep it
+   * to the side (palm p10 1.31, stop p10 0.69). Boundary 0.68. */
+  thumbToCenter: number;
 }
 
 export interface TrackedHand {

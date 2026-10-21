@@ -10,15 +10,34 @@ export const PINKY_TIP = 20;
 
 const FINGER_TIPS = [4, 8, 12, 16, 20];
 const FINGER_PIPS = [3, 6, 10, 14, 18];
-const FINGER_MCPS = [2, 5, 9, 13, 17];
 
 function dist(a: Vec2, b: Vec2): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-/** Hand size reference: wrist -> middle MCP distance. */
-export function handScale(landmarks: Vec2[]): number {
+/** Hand size reference: wrist -> middle MCP distance. */export function handScale(landmarks: Vec2[]): number {
   return Math.max(dist(landmarks[0], landmarks[9]), 1e-4);
+}
+
+/** Thumb reach: thumb-tip to index-MCP distance in palm widths (indexMCP->pinkyMCP).
+ * Dataset-grounded (HaGRID 60/class, 2026-10-21): curled-thumb poses measure
+ * 0.16-0.66 p90 (fist 0.38, one 0.36, peace 0.60), extended-thumb poses
+ * 0.83+ p10 (like 0.83, dislike 0.93, ok 1.08, palm 1.14). The previous
+ * dist(thumbTip, thumbCMC)/handScale feature never crossed its "up" threshold
+ * on real hands (real-thumb p90 0.60 vs the 0.8 cutoff) so the thumb read
+ * down on nearly every real pose. */
+export function thumbOut(landmarks: Vec2[]): number {
+  const palmWidth = Math.max(dist(landmarks[5], landmarks[17]), 1e-4);
+  return dist(landmarks[4], landmarks[5]) / palmWidth;
+}
+
+/** Thumb-tip to palm-center (middle MCP) distance in palm widths. Splits the
+ * all-four-fingers-up pattern: "four" folds the thumb OVER the palm (p90
+ * 0.66) while open-palm/stop hands keep it to the side (palm p10 1.31, stop
+ * p10 0.69). Boundary 0.68. */
+export function thumbToCenter(landmarks: Vec2[]): number {
+  const palmWidth = Math.max(dist(landmarks[5], landmarks[17]), 1e-4);
+  return dist(landmarks[4], landmarks[9]) / palmWidth;
 }
 
 function angleDelta(a: number, b: number): number {
@@ -37,6 +56,17 @@ function hystUp(wasUp: boolean, ext: number): boolean {
   return wasUp ? ext > 0.3 : ext > 0.5;
 }
 
+/**
+ * Thumb Schmitt trigger over the thumbOut reach metric (not raw extension —
+ * real thumbs sit on a continuum; the metric above has dataset margins).
+ * ON above 0.78, OFF below 0.62 (fist p90 0.66 vs like/dislike p10 0.83 —
+ * the cold threshold sits closer to the extended side because a missed
+ * thumbs-up that reads "fist" is the costlier live mistake).
+ */
+function thumbHyst(wasUp: boolean, reach: number): boolean {
+  return wasUp ? reach > 0.62 : reach > 0.78;
+}
+
 /** Extract continuous, resolution-independent features from 21 landmarks. */
 export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 / 30): HandFeatures {
   const s = handScale(landmarks);
@@ -52,15 +82,13 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
   for (let f = 0; f < 5; f++) {
     const tip = landmarks[FINGER_TIPS[f]];
     const pip = landmarks[FINGER_PIPS[f]];
-    const mcp = landmarks[FINGER_MCPS[f]];
     const wrist = landmarks[0];
 
     if (f === 0) {
-      // thumb: distance from index MCP, relative to hand scale
-      const thumbExt = dist(tip, mcp) / s;
-      const ext = Math.min(1, thumbExt / 1.6);
+      // thumb: reach metric (see thumbOut), hysteresis in palm-width units
+      const ext = Math.min(1, thumbOut(landmarks) / 1.6);
       extensions.push(ext);
-      fingersUp.push(hystUp(prev?.fingersUp[f] ?? false, ext));
+      fingersUp.push(thumbHyst(prev?.fingersUp[f] ?? false, thumbOut(landmarks)));
     } else {
       const tipW = dist(tip, wrist);
       const pipW = dist(pip, wrist);
@@ -96,6 +124,8 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
     rollAngle,
     handSize: s,
     thumbDy: (landmarks[THUMB_TIP].y - landmarks[WRIST].y) / s,
+    thumbOut: thumbOut(landmarks),
+    thumbToCenter: thumbToCenter(landmarks),
     palmCenter,
     velocity: { x: 0, y: 0 },
     rollVelocity: 0,
@@ -113,61 +143,84 @@ export function extractFeatures(landmarks: Vec2[], prev?: HandFeatures, dt = 1 /
 }
 
 /**
- * Classify a static gesture from finger pattern.
+ * Classify a static gesture from the finger pattern + thumb reach.
  * up = [thumb, index, middle, ring, pinky]
  *
- * ORDER MATTERS: the weird/specific combos are checked FIRST — they are small,
- * precise shapes that generic "count the fingers" rules would otherwise swallow
- * (e.g. thumb+pinky folded near each other reads as "three" if counts run
- * first). Only when no signature matches do we fall through to count-based
- * poses. Each specific case also takes the feature vector so shape (not just
- * finger pattern) can disambiguate: ok vs pinch, thumbUp vs thumbDown.
+ * DATASET-GROUNDED 2026-10-21 (HaGRID, 60 real photos/class, 18 classes):
+ * rules key off the LONG-FINGER up-pattern (IMRP) and use measured feature
+ * margins for the ambiguous splits. The previous hand-authored rules misread
+ * real hands at 43.8%: the old thumb feature never fired (open palms read
+ * "four", thumbs-up read "fist"), the 👌 was authored as thumb+index+pinky
+ * when real OK hands are ring + middle/ring/pinky up, and "rock" was authored
+ * thumb+pinky when real horns show index+pinky.
+ *
+ * Rule thresholds vs measured p10/p90 (thumbOut / thumbToCenter / pinchDistance / thumbDy):
+ *   - 1111 split (four vs openPalm): thumb-tip→palm-center reach; four p90
+ *     0.66 < 0.68 ≤ stop p10 0.69 / palm p10 1.31. This RESCUES HaGRID "stop"
+ *     (open hand, thumb adducted), which no thumbOut threshold could separate.
+ *   - 1100 split (peace vs thumb-out three): thumbOut; peace family p90 0.89
+ *     vs thumb-three (HaGRID three2) p50 1.05, boundary 0.95.
+ *   - 0000 split (fist vs thumb gesture): thumbOut; fist p90 0.66 vs
+ *     like/dislike p10 0.83 (also the thumb hysteresis band 0.62/0.78).
+ *   - thumbUp vs thumbDown: thumbDy (likes ≤ -1.23 p90, dislikes ≥ +0.98
+ *     p10), boundary -0.6, roll proxy as fallback; ties default thumbUp.
+ *   - 👌 confirmation: pinchDistance < 0.4 (ok class p90 0.23).
  */
 export function classifyGesture(f: HandFeatures): GestureMatch {
   const up = f.fingersUp;
-  const count = up.filter(Boolean).length;
   const [t, i, m, r, p] = up;
+  // long-finger pattern, index/middle/ring/pinky — the primary signal
+  const pat = `${+i}${+m}${+r}${+p}`;
+  const reach = f.thumbOut ?? 0;
 
-  // --- weird shapes first -----------------------------------------------
-  // Full hand and full fist short-circuit before the specific shapes: the
-  // "ok" signature (thumb+index+pinky) is a subset of openPalm, so the open
-  // hand must be checked first or it reads as ok.
-  if (count === 5) return { gesture: 'openPalm', confidence: 0.96 };
-  if (count === 0) return { gesture: 'fist', confidence: 0.95 };
-
-  // OK: thumb+index form a ring, pinky extended, and NOT all five up.
-  if (t && i && p && !m && !r) return { gesture: 'ok', confidence: 0.9 };
-  if (t && i && p && (m || r)) return { gesture: 'ok', confidence: 0.85 };
-
-  // Pinch: thumb+index touching, middle/ring/pinky NOT all up. Distinguish
-  // from OK by the pinch distance: closed = pinch, open with pinky out = ok.
-  if (t && i && !m && !r && !p) {
-    return f.pinchDistance < 0.25
-      ? { gesture: 'pinch', confidence: 0.9 }
-      : { gesture: 'none', confidence: 0.4 };
+  switch (pat) {
+    case '1111':
+      // all four long fingers up: thumb folded over the palm = four, thumb
+      // out to the side = open palm (reset pose). Measured on the tip→center
+      // metric: four p90 0.66 vs stop p10 0.69 vs palm p10 1.31.
+      return f.thumbToCenter >= 0.68
+        ? { gesture: 'openPalm', confidence: 0.93 }
+        : { gesture: 'four', confidence: 0.92 };
+    case '1110':
+      // index+middle+ring — the natural "three"
+      return { gesture: 'three', confidence: 0.93 };
+    case '0111':
+      // middle+ring+pinky up = the real 👌 pose (index curled into the ring);
+      // require the ring to actually be closed
+      return f.pinchDistance < 0.4
+        ? { gesture: 'ok', confidence: 0.9 }
+        : { gesture: 'none', confidence: 0.4 };
+    case '1100':
+      // index+middle: peace — unless the thumb is clearly out (thumb-inclusive
+      // three), which HaGRID shows is a real, common variant
+      return reach >= 0.95
+        ? { gesture: 'three', confidence: 0.82 }
+        : { gesture: 'peace', confidence: 0.93 };
+    case '1001':
+      // index+pinky = horns; the thumb holds m/r down or rides along
+      return { gesture: 'rock', confidence: 0.9 };
+    case '1000':
+      // index only: pinch if the thumb is touching, else point
+      return f.pinchDistance < 0.25
+        ? { gesture: 'pinch', confidence: 0.9 }
+        : { gesture: 'point', confidence: 0.94 };
+    case '0001':
+      // pinky only + thumb out = shaka; without the thumb it's nothing
+      return reach >= 0.5
+        ? { gesture: 'rock', confidence: 0.85 }
+        : { gesture: 'none', confidence: 0.4 };
+    case '0000':
+      // nothing long up: extended thumb = like/dislike, else fist
+      if (t) {
+        const thumbDown = f.thumbDy > -0.6 || Math.abs(f.rollAngle) > 2.2;
+        return thumbDown
+          ? { gesture: 'thumbDown', confidence: 0.85 }
+          : { gesture: 'thumbUp', confidence: 0.9 };
+      }
+      return { gesture: 'fist', confidence: 0.95 };
+    default:
+      // 0100, 0010, 0011, 1011, ... — no trained pose; stay silent rather
+      // than invent a guess
+      return { gesture: 'none', confidence: 0 };
   }
-
-  // Rock/horns: thumb+pinky only.
-  if (t && p && !i && !m && !r) return { gesture: 'rock', confidence: 0.9 };
-
-  // Thumb alone: orientation picks thumbs-up vs thumbs-down. Primary signal
-  // is thumb-tip height vs the wrist (DATASET-GROUNDED 2026-10-05: on real
-  // HaGRID thumbs-up samples the tip sits 1.07-2.25 hand-units ABOVE the wrist
-  // 100% of the time; thumbs-down sits ~1.2 below). The palm-roll proxy stays
-  // as the fallback for hands tilted past the vertical regime; ties default
-  // to thumbUp (classic "liked" pose).
-  if (t && !i && !m && !r && !p) {
-    const thumbDown = f.thumbDy > -0.6 || Math.abs(f.rollAngle) > 2.2;
-    return thumbDown
-      ? { gesture: 'thumbDown', confidence: 0.85 }
-      : { gesture: 'thumbUp', confidence: 0.9 };
-  }
-
-  // --- generic count-based poses ----------------------------------------
-  if (i && m && r && p && !t) return { gesture: 'four', confidence: 0.92 };
-  if (i && m && r && !p) return { gesture: 'three', confidence: 0.92 };
-  if (i && m && !r && !p) return { gesture: 'peace', confidence: 0.93 };
-  if (i && !m && !r && !p) return { gesture: 'point', confidence: 0.94 };
-
-  return { gesture: 'none', confidence: 0 };
 }

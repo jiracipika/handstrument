@@ -133,9 +133,29 @@ It appears in both instrument pickers automatically.
 ## Adding a gesture
 
 1. Classify it in `src/handTracking/gestureRecognizer.ts` (`classifyGesture`) from
-   `features.fingersUp` / `extensions` / `pinchDistance` / `rollAngle`.
+   the long-finger pattern (`fingersUp`) plus the shape features (`pinchDistance`,
+   `thumbOut`, `thumbToCenter`, `thumbDy`) — see "Dataset grounding" below before
+   picking a threshold.
 2. Add a label in `src/audio/mappings.ts` (`GESTURE_LABELS`) and include the id in
    `MAPPABLE_GESTURES` so it shows in the mapping table.
+
+## Dataset grounding
+
+The static classifier is tuned against **real hands**, not canonical diagrams: the
+[HaGRID](https://github.com/hukenovs/hagrid) gesture dataset (60 photos/class)
+extracted to 21-landmark rows by the shared family pipeline on
+`/Volumes/ADATA/datasets/`. Rule thresholds quote measured p10/p90 margins in
+comments, and `tests/dataset.test.ts` pins accuracy on a committed 90-sample
+subset so a tweak that helps synthetic poses but breaks real hands fails CI.
+
+```bash
+npx tsx scripts/eval-dataset.mjs   # full 960-sample eval (needs the dataset extract)
+# 2026-10-21 rewrite: 872/960 = 90.8% (the pre-rewrite rules scored 43.8%)
+```
+
+Known honest confusion: upside-down "stop" (HaGRID `stop_inverted`) still splits
+between openPalm and four — the folded-vs-adducted thumb is not fully separable
+in 2D landmarks.
 
 ## Adding chord mappings / actions
 
@@ -151,7 +171,8 @@ npm test     # Vitest: gesture classification, state machine, motion, chord math
 ```
 
 The synthetic-landmark tests run the same code path the camera feeds — no webcam
-needed in CI.
+needed in CI. `tests/dataset.test.ts` additionally classifies 90 committed real
+HaGRID landmark samples and fails under 85% accuracy.
 
 ## Privacy
 
